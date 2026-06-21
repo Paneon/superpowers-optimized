@@ -1,198 +1,161 @@
 ---
 name: subagent-driven-development
 description: >
-  Executes plans using parallel subagents with per-task implementation
-  and staged review gates. Invoke for parallel plan execution in the
-  current session. Routed by writing-plans handoff or using-superpowers
-  for large plans with independent tasks.
+  Executes plans with fresh subagents per task or wave, verifying at the
+  altitude that catches bugs — the project's integration gate per wave and
+  one whole-branch review before the PR, not a reviewer subagent after every
+  task. Invoke for plan execution in the current session. Routed by
+  writing-plans handoff or using-superpowers for large independent plans.
 ---
 
 # Subagent-Driven Development
 
-Execute a plan with fresh subagents per task and strict review gates.
+Execute a plan with fresh-context subagents. The governing idea: **put each check
+where it pays off.** Per-task reviewer subagents are expensive and structurally blind
+to integration regressions (each sees one diff in isolation); the project's own
+verification gate catches those, deterministically. So review runs **once, before the
+PR** — not after every task.
 
 ## Required Start
 
 Announce: `I'm using subagent-driven-development to execute this plan.`
+
+## The Three Altitudes
+
+| Altitude | When | What runs | Catches |
+|---|---|---|---|
+| **Per task** | every task | implementer does TDD, runs the task's own test, self-reviews, commits. **No reviewer subagent.** | local defects, cheaply |
+| **Per wave/phase** | after each wave of tasks | the project's **verification gate** (from CLAUDE.md/AGENTS.md — e.g. `make test-e2e`, `pnpm test`) | **integration regressions** — what per-task review misses |
+| **Pre-PR (once)** | all tasks done | **one** whole-branch review + security pass if any task was flagged | what only reading the whole change reveals |
 
 ## Core Flow
 
 ```dot
 digraph sdd_process {
     rankdir=TB;
-
-    subgraph cluster_per_task {
-        label="Per Task";
-        "Dispatch implementer subagent" [shape=box];
-        "Implementer asks questions?" [shape=diamond];
-        "Answer questions, provide context" [shape=box];
-        "Implementer implements, tests, self-reviews" [shape=box];
-        "Dispatch spec reviewer subagent" [shape=box];
-        "Spec compliant?" [shape=diamond];
-        "Implementer fixes spec gaps" [shape=box];
-        "Dispatch code quality reviewer" [shape=box];
-        "Quality approved?" [shape=diamond];
-        "Implementer fixes quality issues" [shape=box];
-        "Mark task complete" [shape=box];
-    }
-
-    "Read plan, extract all tasks, create tracking" [shape=box];
-    "More tasks?" [shape=diamond];
-    "Final whole-branch review" [shape=box];
+    "Read plan, extract tasks, group into waves" [shape=box];
+    "Dispatch wave (implementers, single message)" [shape=box];
+    "Implementer asks questions?" [shape=diamond];
+    "Answer, re-dispatch" [shape=box];
+    "Implementers: TDD, test, self-review, commit" [shape=box];
+    "Run project verification gate (integration)" [shape=box];
+    "Gate green?" [shape=diamond];
+    "Investigate failure, dispatch fix" [shape=box];
+    "More waves?" [shape=diamond];
+    "One whole-branch review" [shape=box];
     "Invoke finishing-a-development-branch" [shape=doublecircle];
 
-    "Read plan, extract all tasks, create tracking" -> "Dispatch implementer subagent";
-    "Dispatch implementer subagent" -> "Implementer asks questions?";
-    "Implementer asks questions?" -> "Answer questions, provide context" [label="yes"];
-    "Answer questions, provide context" -> "Dispatch implementer subagent";
-    "Implementer asks questions?" -> "Implementer implements, tests, self-reviews" [label="no"];
-    "Implementer implements, tests, self-reviews" -> "Dispatch spec reviewer subagent";
-    "Dispatch spec reviewer subagent" -> "Spec compliant?";
-    "Spec compliant?" -> "Implementer fixes spec gaps" [label="no"];
-    "Implementer fixes spec gaps" -> "Dispatch spec reviewer subagent" [label="re-review"];
-    "Spec compliant?" -> "Dispatch code quality reviewer" [label="yes"];
-    "Dispatch code quality reviewer" -> "Quality approved?";
-    "Quality approved?" -> "Implementer fixes quality issues" [label="no"];
-    "Implementer fixes quality issues" -> "Dispatch code quality reviewer" [label="re-review"];
-    "Quality approved?" -> "Mark task complete" [label="yes"];
-    "Mark task complete" -> "More tasks?";
-    "More tasks?" -> "Dispatch implementer subagent" [label="yes"];
-    "More tasks?" -> "Final whole-branch review" [label="no"];
-    "Final whole-branch review" -> "Invoke finishing-a-development-branch";
+    "Read plan, extract tasks, group into waves" -> "Dispatch wave (implementers, single message)";
+    "Dispatch wave (implementers, single message)" -> "Implementer asks questions?";
+    "Implementer asks questions?" -> "Answer, re-dispatch" [label="yes"];
+    "Answer, re-dispatch" -> "Dispatch wave (implementers, single message)";
+    "Implementer asks questions?" -> "Implementers: TDD, test, self-review, commit" [label="no"];
+    "Implementers: TDD, test, self-review, commit" -> "Run project verification gate (integration)";
+    "Run project verification gate (integration)" -> "Gate green?";
+    "Gate green?" -> "Investigate failure, dispatch fix" [label="no"];
+    "Investigate failure, dispatch fix" -> "Run project verification gate (integration)";
+    "Gate green?" -> "More waves?" [label="yes"];
+    "More waves?" -> "Dispatch wave (implementers, single message)" [label="yes"];
+    "More waves?" -> "One whole-branch review" [label="no"];
+    "One whole-branch review" -> "Invoke finishing-a-development-branch";
 }
 ```
 
-1. Read the plan once and extract all tasks.
-2. Create task tracking for all tasks.
-3. For each task:
-- Dispatch implementer subagent with full task text and minimal required context.
-- Resolve implementer questions before coding.
-- Require implementer verification evidence.
-- Run spec-compliance review.
-- If spec fails, return to implementer and re-review.
-- Run code-quality review.
-- If quality fails, return to implementer and re-review.
-- Mark task complete: update the task’s checkbox in plan.md from `- [ ]` to `- [x]`. If `state.md` exists with a plan status section, update it to reflect the completed task.
-   - For complex or high-risk tasks, validate the approach against requirements and consider simpler alternatives before or after the implementer’s work.
-   - For tasks centered on frontend/UI, apply `frontend-design` standards to guide structure, styling, and accessibility.
-4. Run final whole-branch review.
-5. Invoke `finishing-a-development-branch`.
+1. Read the plan once; group tasks into waves by file overlap and dependency.
+2. For each wave: dispatch implementers, resolve questions, require verification evidence per task, then run the **project verification gate** before the next wave.
+3. After the last wave: run **one** whole-branch review.
+4. Invoke `finishing-a-development-branch`.
 
-## Parallel Waves (default for independent tasks)
+## Inline vs Subagent (don't pay for context you don't need)
 
-When tasks are independent and touch disjoint files, dispatch them as a wave — this is the preferred mode, not a special case. Sequential execution is the fallback for dependent tasks, not the default.
+A subagent's isolated context is a real cost. Dispatch one only when it pays off:
 
-**Decision rule:** Before starting execution, group tasks into waves based on file overlap and state dependencies. Tasks with no shared files and no sequential dependency belong in the same wave.
+- **Small/coupled plan (few tasks, shared state):** execute **inline** in this session. No dispatch.
+- **Large plan with independent tasks:** dispatch implementers — fresh context per task, and parallel waves win wall-clock.
 
-1. Build a wave of independent tasks.
-2. Dispatch all implementers in a **single message** with multiple parallel Agent tool calls. Do not stagger across multiple messages.
-3. Review each task with the same two-stage gate.
-4. Run integration verification after the wave completes.
-5. Update all completed task checkboxes in plan.md (`- [ ]` → `- [x]`) and sync state.md if present.
-6. Proceed to the next wave.
+Either way: **no per-task reviewer subagent.** The only review dispatch is the single whole-branch one at the end.
 
-If any overlap or shared-state risk exists within a wave, move the conflicting task to the next sequential wave.
+## Parallel Waves (for independent tasks)
 
-**Why single-message dispatch matters for cost:** All subagents share the same cached system prompt prefix. Dispatching them simultaneously in one message means every agent gets a cache hit on that prefix and only pays for its small unique task prompt. Staggered dispatch provides no additional benefit and wastes wall-clock time.
+When tasks are independent and touch disjoint files, dispatch them as a wave:
+
+1. Group tasks with no shared files and no sequential dependency into one wave.
+2. Dispatch all implementers in a **single message** with multiple parallel Agent calls (shared cached system-prompt prefix → each agent only pays for its small unique task prompt; staggering wastes wall-clock and cache benefit).
+3. When the wave's implementers all report DONE, run the **project verification gate** — this is the integration checkpoint.
+4. Update completed task checkboxes in the plan (`- [ ]` → `- [x]`); sync `state.md` if present.
+5. Proceed to the next wave. Move any shared-file/shared-state task to a later sequential wave.
+
+## Plan Drift
+
+If implementation forces an interface to change, update the plan's `Produces`/`Consumes`
+line (the single source of truth) in the same commit, so later tasks/waves read reality.
+
+## Pre-PR Whole-Branch Review (the only review dispatch)
+
+After every wave is green:
+1. Full project verification gate (the authoritative one — e.g. the complete e2e suite, not a subset).
+2. Any code-health/audit gate the project defines.
+3. **One** whole-branch review over the entire diff (`git diff <merge-base>..HEAD`) using `requesting-code-review` — includes a security pass if any task carried a `security` flag. Fix Critical/Important; note Minor.
+4. `finishing-a-development-branch`.
 
 ## E2E Process Hygiene
 
-When dispatching subagents that start background services (servers, databases, queues):
+Subagents are stateless — they don't know about services started by earlier subagents.
+Accumulated background processes cause port conflicts and false results. For any
+E2E/service task, include in the subagent prompt:
 
-Subagents are stateless — they do not know about processes started by previous subagents. Accumulated background processes cause port conflicts, stale responses, and false test results.
-
-Include in the subagent prompt for any E2E or service-dependent task:
-
-**Unix/macOS:**
 ```
-Before starting any service:
-1. Kill existing instances: pkill -f "<service-pattern>" 2>/dev/null || true
-2. Verify the port is free: lsof -i :<port> && echo "ERROR: port still in use" || echo "Port free"
-
-After tests complete:
-1. Kill the service you started.
-2. Verify cleanup: pgrep -f "<service-pattern>" && echo "WARNING: still running" || echo "Cleanup verified"
+Before starting any service: kill existing instances (pkill -f "<pattern>"), verify the port is free (lsof -i :<port>).
+After tests: kill the service you started, verify cleanup (pgrep -f "<pattern>").
 ```
-
-**Windows:**
-```
-Before starting any service:
-1. Kill existing instances: taskkill /F /IM "<process-name>" 2>nul || echo "No existing process"
-2. Verify the port is free: netstat -ano | findstr :<port> && echo "ERROR: port still in use" || echo "Port free"
-
-After tests complete:
-1. Kill the service you started.
-2. Verify cleanup: tasklist | findstr "<process-name>" && echo "WARNING: still running" || echo "Cleanup verified"
-```
-
-Exception: persistent dev servers the user explicitly keeps running — document them in `state.md`.
+Exception: persistent dev servers the user keeps running — document in `state.md`.
 
 ## Handling Implementer Status
 
-Implementer subagents report one of four statuses. Handle each appropriately:
-
-**DONE:** Proceed to spec compliance review.
-
-**DONE_WITH_CONCERNS:** The implementer completed the work but flagged doubts. Read the concerns before proceeding. If the concerns are about correctness or scope, address them before review. If they're observations (e.g., "this file is getting large"), note them and proceed to review.
-
-**NEEDS_CONTEXT:** The implementer needs information that wasn't provided. Provide the missing context and re-dispatch.
-
-**BLOCKED:** The implementer cannot complete the task. Assess the blocker:
-1. If it's a context problem, provide more context and re-dispatch with the same model.
-2. If the task requires more reasoning, re-dispatch with a more capable model.
-3. If the task is too large, break it into smaller pieces.
-4. If the plan itself is wrong, escalate to the user.
-5. If the user is unavailable and the task is non-critical: document the block in `state.md` and advance to the next independent task.
-
-**Never** ignore an escalation or force the same model to retry without changes. If the implementer said it's stuck, something needs to change. Never silently skip or mark a blocked task complete.
-
-## Hard Rules
-
-- Do not execute implementation on `main`/`master` without explicit user permission.
-- Do not skip spec review.
-- Do not skip quality review.
-- Do not accept unresolved review findings.
-- Do not ask subagents to read long plan files when task text can be passed directly.
+**DONE:** record verification evidence; continue the wave.
+**DONE_WITH_CONCERNS:** read the concerns; address correctness/scope before continuing, note observations.
+**NEEDS_CONTEXT:** provide the missing context and re-dispatch.
+**BLOCKED:** assess — context problem (re-dispatch same model), needs more reasoning (more capable model), too large (split), plan is wrong (escalate). If the user is unavailable and the task is non-critical, document the block in `state.md` and advance to the next independent task. Never silently skip or mark a blocked task complete; never force the same model to retry without changes.
 
 ## Context Isolation
 
-Never forward parent session context or history to subagents. Construct each subagent's prompt from scratch using only:
-- Task text
-- Acceptance criteria
-- Needed file paths
-- Relevant constraints
-
-Exclude unrelated prior assistant analysis and old failed hypotheses. Subagents must not receive conversation history, prior reasoning chains, or context from other subagent runs.
-
-**Why this is also the cache-optimal approach:** All subagents share the same system prompt prefix, which the API caches. Keeping each subagent's input as `[cached system prompt] + [small unique task prompt]` means every agent hits the cache for the heavy shared prefix and only pays full input token price for its small task-specific tail. Forwarding parent conversation history would make each subagent's prefix unique, breaking cache sharing and multiplying input costs across the wave.
+Never forward parent session context or history to subagents. Build each prompt from
+scratch with only: task text, acceptance criteria, needed file paths, relevant
+constraints. Exclude prior assistant analysis and failed hypotheses. This is also
+cache-optimal: `[cached system prompt] + [small unique task prompt]` keeps the heavy
+prefix shared across the wave; forwarding history makes each prefix unique and
+multiplies input cost.
 
 ## Subagent Skill Leakage Prevention
 
-Subagents can discover superpowers-optimized skills via filesystem access and invoke them, causing a focused implementer to behave as a workflow orchestrator. Every subagent prompt MUST include this instruction:
+Every subagent prompt MUST include:
 
 > You are a focused subagent. Do NOT invoke any skills from the superpowers-optimized plugin. Do NOT use the Skill tool. Your only job is the task described below.
 
 ## Model Selection for Agent Tool Calls
 
-Choose model based on task type when dispatching subagents via the Agent tool:
-
 | Model | Use for |
 |---|---|
-| `haiku` | File reads, summarization, log scanning, patch verification — output is data, not decisions |
-| `sonnet` | Default for all implementation tasks |
-| `opus` | Architecture analysis, complex spec review, multi-system debugging, any task requiring reasoning across many constraints at once |
+| `haiku` | file reads, summarization, log scanning, patch verification — output is data, not decisions |
+| `sonnet` | default for all implementation tasks |
+| `opus` | architecture analysis, multi-system debugging, the whole-branch review, tasks reasoning across many constraints |
 
-Apply via the `model` parameter in Agent tool calls. Default to `sonnet` when uncertain. Only upgrade to `opus` when the task is genuinely reasoning-heavy — not just large.
+Apply via the `model` parameter. Default `sonnet`; upgrade to `opus` only when genuinely reasoning-heavy, not merely large.
+
+## Hard Rules
+
+- Do not implement on `main`/`master` without explicit user permission.
+- Do not skip the per-wave verification gate or the final whole-branch review.
+- Do not reintroduce per-task reviewer subagents — the wave gate + one final review is the design.
+- Do not accept unresolved review findings.
+- Do not make subagents read long plan files when task text can be passed directly.
 
 ## Prompt Templates
 
-Use:
 - `./implementer-prompt.md`
-- `./spec-reviewer-prompt.md`
-- `./code-quality-reviewer-prompt.md`
+- Final review: `requesting-code-review` templates.
 
 ## Integration
 
-- Setup workspace first with `using-git-worktrees`.
-- Use `requesting-code-review` templates for quality review structure.
+- Set up workspace first with `using-git-worktrees`.
 - Finish with `finishing-a-development-branch`.

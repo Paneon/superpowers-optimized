@@ -53,10 +53,12 @@ Technical execution includes code edits, debugging, planning, review, test statu
 
 ## Entry Sequence
 
+**Orientation source.** A project with a hand-curated docs tree — detected by `docs/README.md` existing — already has the minimal, maintained context map that `project-map.md` would generate. In such a **curated-docs project**, defer to `docs/` for orientation and skip project-map generation, its setup nag, and its staleness machinery entirely (a generated map would duplicate, then drift from, the curated one). Every step below that mentions `project-map.md` applies only to projects *without* a curated `docs/`.
+
 1. Invoke `token-efficiency` at session start — applies to all sessions, always.
 2. **Fresh project gate** — evaluate both conditions in order:
    - The user's request contains creation/build intent: any of "build", "create", "make", "implement", "scaffold", "set up", "write", "generate", "develop", "start"
-   - Run a filesystem check: `ls project-map.md 2>/dev/null` — gate only fires if the file does **not** exist
+   - Run a filesystem check: `ls docs/README.md project-map.md 2>/dev/null` — gate only fires if **neither** a curated `docs/` tree (`docs/README.md`) **nor** `project-map.md` exists
 
    If both are true, **pause before proceeding** and tell the user exactly this:
 
@@ -80,14 +82,14 @@ Technical execution includes code edits, debugging, planning, review, test statu
    - **If they decline:** proceed to step 3.
 
    **Step 2b — Existing project memory check** (runs only when step 2 did NOT fire):
-   If the user's request is non-trivial (not micro) AND `project-map.md` does not exist AND the project has 10+ files:
+   If the user's request is non-trivial (not micro) AND there is no curated `docs/` (`docs/README.md`) AND `project-map.md` does not exist AND the project has 10+ files:
    - Mention once (do not block): *"Note: this project has no project-map.md. I'll work fine without it, but if you want faster orientation in future sessions, I can generate one after this task. Just say 'map this project'."*
    - Do not repeat this notice in subsequent tasks within the same session.
 
 3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
 4. If resuming work from a prior session, read `state.md` if it exists. Before ending any session where significant decisions were made (design choices, rejected approaches, non-obvious constraints discovered), invoke `context-management` to write a `[saved]` entry — even if the work is complete. This is the only mechanism that preserves the "why" across sessions.
 5. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
-6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. The map tells you what exists and where — when you need a file's actual content (for modification, comparison, or debugging), read it directly with the Read tool. Staleness is detected automatically by the session-start hook: if the map is stale, a `<project-map-stale>` tag is injected into session context with the mismatched hashes. When you see that tag:
+6. **Orient to the project.** In a curated-docs project, read `docs/README.md` and the feature/domain docs it links to orient — it is the maintained map; do not generate or read `project-map.md`, and ignore any project-map staleness machinery. Otherwise, if `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. The map tells you what exists and where — when you need a file's actual content (for modification, comparison, or debugging), read it directly with the Read tool. Staleness is detected automatically by the session-start hook: if the map is stale, a `<project-map-stale>` tag is injected into session context with the mismatched hashes. When you see that tag:
    - **With git:** run `git diff --name-only <map_hash> HEAD` to find changed files. Re-read only those; everything else in the map is still valid. Update the corresponding Key Files entries in `project-map.md` and refresh the git hash and date in the header.
    - **Without git:** compare the map's generation timestamp to the modification time of files listed in the map's Hot Files section. Re-read any that are newer than the map. Then update their Key Files entries and refresh the generation timestamp in the header.
 7. Follow the path for the classified complexity level.

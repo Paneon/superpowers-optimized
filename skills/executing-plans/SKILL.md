@@ -53,14 +53,19 @@ If working on main/master branch AND the plan involves code changes:
 If already on a feature branch, or the plan is documentation/config only:
 - Skip worktree setup. Confirm with user that the current branch is appropriate.
 
-### Step 3: Execute Tasks
+### Step 3: Execute Tasks (per task)
 For each task:
 1. Follow each step exactly (plan has bite-sized steps with checkboxes).
-2. Run verifications as specified.
-3. Mark task complete.
+2. Run the task's own test (TDD: write failing test → implement → pass). Self-review the diff against the task's interface contract.
+3. Mark task complete and commit.
 4. For tasks involving UI/UX or frontend implementation, apply guidance from `frontend-design`.
 
-**Note:** Superpowers works significantly better with subagent support. If subagents are available, use `subagent-driven-development` instead — the quality of work will be higher with fresh-context-per-task and two-stage review gates.
+**No per-task reviewer.** Local defects are caught by the task's own test plus the project's static gates (typecheck/lint). The checks that matter run at higher altitude (below).
+
+### Step 4: Verify per phase
+At the end of each plan phase, run the project's **verification gate** (from CLAUDE.md/AGENTS.md — e.g. `make test-e2e`, `pnpm test`). This is the integration checkpoint that catches regressions a single task's test cannot. Do not start the next phase on a red gate; a failure after your change defaults to "my change broke it" — investigate before dismissing.
+
+**Note:** For a large plan with independent tasks, `subagent-driven-development` runs faster (fresh context per task, parallel waves). For small or tightly-coupled plans, inline (this skill) avoids subagent overhead.
 
 ## Engineering Rigor for Complex Tasks
 
@@ -96,6 +101,7 @@ Do not carry long historical summaries. Never forward full session history to su
 
 ## Completion
 
-After all tasks pass verification:
-1. Announce `finishing-a-development-branch`.
-2. Invoke `finishing-a-development-branch`.
+After all phases pass the verification gate:
+1. Run the **full** project verification gate (the authoritative one — e.g. the complete e2e suite, not a subset) plus any code-health/audit gate the project defines.
+2. Run **one** whole-branch review over the entire diff via `requesting-code-review` (include a security pass if any task carried a `security` flag). Fix Critical/Important; note Minor.
+3. Invoke `finishing-a-development-branch`.

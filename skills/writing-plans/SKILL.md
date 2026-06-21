@@ -2,160 +2,140 @@
 name: writing-plans
 description: >
   MUST USE after design approval to decompose requirements into executable
-  task plans with verification commands and TDD ordering. Triggers on:
-  "write a plan", "break this down", "plan the implementation", after
-  brainstorming approval. Routed by brainstorming as the next step.
+  task plans. Produces contract-altitude plans — interfaces + the test that
+  proves each task — that stay true as implementation reveals reality.
+  Triggers on: "write a plan", "break this down", "plan the implementation",
+  after brainstorming approval. Routed by brainstorming as the next step.
 ---
 
 # Writing Plans
 
 Create an implementation plan another agent can execute with minimal ambiguity.
+The plan is a **contract**, not a transcript: it pins down what each task must
+produce and the test that proves it — not the literal implementation lines,
+which drift the moment the first task is built differently than imagined.
+
+## Why contract altitude
+
+A plan full of complete implementation code rots. Once Task 1 is built (or its
+signature changes under review), every later task that quoted Task 1's code is
+describing a past that no longer exists, and the executor builds against fiction.
+So:
+
+- **The interface is the contract.** Each task states the exact names, signatures,
+  and types it *produces* and *consumes*. Later tasks depend on this block, not on
+  a code snapshot.
+- **The test is the spec.** Showing *test* code is good — it is the durable, executable
+  statement of what "done" means. Showing *implementation* code is what goes stale:
+  describe the change and let the implementer write it.
+- **Illustrative code only.** If an implementation snippet genuinely clarifies intent,
+  mark it `Illustrative (implementer writes the real thing):`. Never present it as lines to transcribe.
 
 ## Output Path
 
-Save to `docs/plans/YYYY-MM-DD-<feature-name>.md`.
-- User preferences for plan location override this default.
+Save to `.claude/plans/YYYY-MM-DD-<feature-name>.md` — a working artifact, kept out
+of any curated `docs/` tree. (User preferences for plan location override this.)
 
 ## Plan Header
 
 ```markdown
 # <Feature Name> Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers-optimized:subagent-driven-development (recommended) or superpowers-optimized:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers-optimized:subagent-driven-development (recommended) or superpowers-optimized:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** <single sentence>
 **Architecture:** <2-4 sentences>
 **Tech Stack:** <languages/libraries/tools>
-**Assumptions:** <list the key assumptions this plan rests on. For each, state what it excludes: "Assumes X — will NOT work if Y."> *(skip only if the plan contains zero conditional logic)*
+**Verification gate:** <the project's own commands — e.g. `make test-e2e`, `pnpm test`, `cargo test`. Read these from the project's CLAUDE.md/AGENTS.md/README; do NOT invent or hardcode a runner.>
+**Assumptions:** <key assumptions this plan rests on. For each: "Assumes X — will NOT work if Y."> *(skip only if the plan contains zero conditional logic)*
 
 ---
 ```
 
 ## Scope Check
 
-If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.
+If the spec covers multiple independent subsystems, suggest breaking it into separate
+plans — one per subsystem, each producing working, testable software on its own.
 
 ## File Structure
 
-Before defining tasks, map out which files will be created or modified and what each one is responsible for. This is where decomposition decisions get locked in.
+Before defining tasks, map which files will be created or modified and what each is
+responsible for. Design units with clear boundaries and one responsibility each;
+files that change together live together; follow established patterns in existing codebases.
 
-- Design units with clear boundaries and well-defined interfaces. Each file should have one clear responsibility.
-- Prefer smaller, focused files over large ones that do too much — you reason best about code you can hold in context at once, and your edits are more reliable when files are focused.
-- Files that change together should live together. Split by responsibility, not by technical layer.
-- In existing codebases, follow established patterns. If the codebase uses large files, don't unilaterally restructure — but if a file you're modifying has grown unwieldy, including a split in the plan is reasonable.
+## Phases and Task Right-Sizing
 
-This structure informs the task decomposition. Each task should produce self-contained changes that make sense independently.
-
-## Task Rules
-
-- Keep tasks independent when possible.
-- Keep each step to one action (roughly 2-5 minutes).
-- Use exact file paths.
-- Include exact verification commands and expected outcomes.
-- Use TDD ordering when code behavior changes.
-- For ambiguous features, ask clarifying questions before finalizing the plan rather than guessing.
+Group tasks into **phases**. A phase is a coherent slice that ends at a green run of the
+project's verification gate — it is the **integration checkpoint**, the level that
+actually catches regressions. There is **no per-task reviewer gate**, so do not fragment
+into micro-tasks to manufacture review points. A task is the smallest slice that is
+independently testable and worth its own commit. Fold setup/config/scaffolding into the
+task whose deliverable needs them.
 
 ## Task Template
 
 ````markdown
 ### Task N: <Name>
 
-**Files:**
-- Create: `<path>`
-- Modify: `<path>`
-- Test: `<path>`
+**Files:** Create / Modify / Test — exact paths.
 
-**Security flag:** `none` *(set to `security` if this task handles auth, credentials, input validation, permissions, crypto, or data access boundaries — triggers pre-implementation security review before the implementer is dispatched)*
+**Security flag:** `none` *(set to `security` if this task handles auth, credentials, input validation, permissions, crypto, or data-access boundaries — triggers pre-implementation security review)*
 
-**Does NOT cover:** *(required when this task adds a condition, gate, trigger, or any "when X do Y" logic — state the scenarios the condition excludes. If an excluded scenario should be covered, revise this task before implementing.)*
+**Produces:** <names, signatures, types later tasks rely on — the single source of truth for this interface>
+**Consumes:** <interfaces from earlier tasks — exact signatures>
 
-- [ ] **Step 1: Write failing test**
+**Acceptance:** <observable behavior> proven by <exact test file + what it asserts>.
+
+**Does NOT cover:** *(required when this task adds a condition, gate, or "when X do Y" logic — state the scenarios it excludes. If an excluded scenario should be covered, revise this task before implementing.)*
+
+- [ ] **Step 1: Write the failing test** (show the test — it is the contract)
 
 ```<lang>
 <actual test code>
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `<command>`
-Expected: FAIL with "<expected failure reason>"
-
-- [ ] **Step 3: Implement minimal change**
-
-```<lang>
-<actual implementation code>
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `<command>`
-Expected: PASS
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add <files>
-git commit -m "<message>"
-```
+- [ ] **Step 2: Run it, confirm it fails for the right reason** — `<command>` → FAIL with "<reason>"
+- [ ] **Step 3: Implement the minimal change to pass** *(describe the change; illustrative code only if it clarifies)*
+- [ ] **Step 4: Run the test, confirm PASS** — `<command>`
+- [ ] **Step 5: Commit** — `git commit -m "<message>"`
 ````
 
-## No Placeholders
+## Single Source of Truth
 
-Every step must contain the actual content an engineer needs. These are **plan failures** — never write them:
+Interfaces live in the task's `Produces`/`Consumes` lines and nowhere else. When
+execution forces an interface to change, the plan is updated *there* — so a later task
+always reads the current contract, never a stale copy.
 
-- "TBD", "TODO", "implement later", "fill in details"
-- "Add appropriate error handling" / "add validation" / "handle edge cases"
-- "Write tests for the above" (without actual test code)
-- "Similar to Task N" (repeat the code — the engineer may be reading tasks out of order)
-- Steps that describe what to do without showing how (code blocks required for code steps)
-- References to types, functions, or methods not defined in any task
+## No Placeholders (for the durable parts)
 
-## Quality Bar
+The interface, acceptance test, and verification commands must be concrete — never
+"TBD", "add validation", "similar to Task N", or a test that asserts nothing. The
+*implementation* steps are intentionally not full code; that is the point, not a gap.
 
-- No vague steps like "update logic".
-- No hidden dependencies between distant tasks.
-- Call out migrations, feature flags, and rollback checks when relevant.
-- Prefer small vertical slices over large horizontal phases.
+## Self-Review (inline, no subagent)
 
-## Self-Review
+1. **Coverage:** every spec requirement maps to a task. Add tasks for gaps.
+2. **Interface consistency:** a name/type a later task *consumes* matches what an earlier task *produces* (`clearLayers()` in Task 3 ≠ `clearFullLayers()` in Task 7).
+3. **Every task names its proving test.** No task is "done" by inspection.
+4. **Scope-reduction scan:** search for "v1", "basic", "simple", "for now", "minimal" — verify each was user-sanctioned, not a quiet downgrade.
 
-After writing the complete plan, look at the spec with fresh eyes and check the plan against it. This is a checklist you run yourself — not a subagent dispatch.
-
-**1. Spec coverage:** Skim each section/requirement in the spec. Can you point to a task that implements it? List any gaps.
-
-**2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
-
-**3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
-
-**4. Scope-reduction scan:** Search the plan for: "v1", "basic", "simple", "for now", "placeholder", "initial version", "minimal". For each hit, verify it was explicitly sanctioned by the user — not a quiet scope downgrade from what was requested. Fix any that weren't.
-
-If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
+Fix issues inline; no re-review.
 
 ## Execution Handoff
 
-After saving the plan and completing self-review, auto-select the execution approach using the logic below, then output the ready message and **stop**. Do not invoke any execution skill until the user replies.
+After saving and self-review, auto-select the execution approach, output the ready
+message, and **stop**. Do not invoke any execution skill until the user replies.
 
 ### Selection Logic (evaluate in order)
-
 1. Current context window ≥ 60% full → **Subagent-Driven** (offload context pressure)
-2. Task count ≥ 5 → **Subagent-Driven** (fresh context per task)
-3. Tasks have heavy inter-task state sharing (each task depends on runtime state from the previous) → **Inline**
-4. Default → **Subagent-Driven**
+2. Tasks are independent and touch disjoint files, and there are ≥ 5 → **Subagent-Driven** (fresh context, parallel waves)
+3. Default → **Inline** (no per-task subagent overhead for small/coupled plans)
 
 ### Ready Message
-
 ```
-Plan saved to `docs/plans/<filename>.md`. Ready to execute with **[Subagent-Driven / Inline Execution]** (<N> tasks[, <one-word reason>]). Reply to start, or say "inline" / "subagent" to switch.
+Plan saved to `.claude/plans/<filename>.md`. Ready to execute with **[Subagent-Driven / Inline Execution]** (<N> tasks[, <one-word reason>]). Reply to start, or say "inline" / "subagent" to switch.
 ```
 
-**Stop here.** Do not invoke any execution skill until the user replies.
-
-### On User Reply
-
-**If Subagent-Driven:**
-- **REQUIRED SUB-SKILL:** Use superpowers-optimized:subagent-driven-development
-- Fresh subagent per task + two-stage review
-
-**If Inline Execution:**
-- **REQUIRED SUB-SKILL:** Use superpowers-optimized:executing-plans
-- Continuous execution with checkpoints for review
+**Stop here.** On reply:
+- **Subagent-Driven:** REQUIRED SUB-SKILL — `superpowers-optimized:subagent-driven-development`
+- **Inline:** REQUIRED SUB-SKILL — `superpowers-optimized:executing-plans`

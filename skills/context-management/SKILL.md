@@ -21,6 +21,8 @@ description: >
 
 Do not default to `state.md` for a map request. Do not default to `project-map.md` for a save-state request.
 
+**Curated-docs projects:** if `docs/README.md` exists, the project already has a hand-maintained context map. Do **not** generate `project-map.md` — it would duplicate and then drift from `docs/`. Tell the user their curated `docs/` already serves this role, and offer to update the relevant `docs/` page instead. (`state.md` / `session-log.md` cross-session persistence still applies normally.)
+
 ---
 
 ## Purpose

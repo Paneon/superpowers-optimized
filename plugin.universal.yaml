@@ -6,9 +6,9 @@ meta:
   name: superpowers-optimized
   version: "6.5.2"
   description: "Workflow skills and hooks for Claude Code and Codex"
-  author: "Jesse Vincent, forked by REPOZY"
-  homepage: "https://github.com/REPOZY/superpowers-optimized"
-  repository: "https://github.com/REPOZY/superpowers-optimized"
+  author: "Jesse Vincent; forked by REPOZY; customized by Paneon"
+  homepage: "https://github.com/Paneon/superpowers-optimized"
+  repository: "https://github.com/Paneon/superpowers-optimized"
   license: "MIT"
   keywords: ["skills", "tdd", "debugging", "code-review", "workflows", "agentic", "token-efficiency", "hooks", "safety", "subagent"]
   platforms: [claude-code, codex]

@@ -3,10 +3,10 @@
   "version": "6.6.1",
   "description": "Structured workflow skills for Codex — systematic debugging, TDD, brainstorming, code review, and 30+ expert workflows. Skills work on all platforms. Lifecycle hooks (routing, safety, reminders) require separate setup on macOS/Linux.",
   "author": {
-    "name": "Jesse Vincent, forked by REPOZY"
+    "name": "Jesse Vincent; forked by REPOZY; customized by Paneon"
   },
-  "homepage": "https://github.com/REPOZY/superpowers-optimized",
-  "repository": "https://github.com/REPOZY/superpowers-optimized",
+  "homepage": "https://github.com/Paneon/superpowers-optimized",
+  "repository": "https://github.com/Paneon/superpowers-optimized",
   "license": "MIT",
   "keywords": ["skills", "tdd", "debugging", "code-review", "workflows", "agentic", "token-efficiency", "hooks", "safety", "subagent"],
   "skills": "./skills/",

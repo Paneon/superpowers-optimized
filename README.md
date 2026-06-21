@@ -2,10 +2,10 @@
 
 [![AI Coding Agents](https://img.shields.io/badge/USE_WITH-Claude_Code_%7C_Codex_%7C_OpenCode_%7C_Gemini_CLI_%7C_Antigravity-white?style=for-the-badge)]()
 
-[![GitHub stars](https://img.shields.io/github/stars/REPOZY/superpowers-optimized?style=for-the-badge&color=white)](https://github.com/REPOZY/superpowers-optimized/stargazers)
-[![Version](https://img.shields.io/github/v/release/REPOZY/superpowers-optimized?style=for-the-badge&color=white)](https://github.com/REPOZY/superpowers-optimized/releases)
+[![GitHub stars](https://img.shields.io/github/stars/Paneon/superpowers-optimized?style=for-the-badge&color=white)](https://github.com/Paneon/superpowers-optimized/stargazers)
+[![Version](https://img.shields.io/github/v/release/Paneon/superpowers-optimized?style=for-the-badge&color=white)](https://github.com/Paneon/superpowers-optimized/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
-[![Install](https://img.shields.io/badge/install-now-white?style=for-the-badge&logo=claude)](https://github.com/REPOZY/superpowers-optimized#installation)
+[![Install](https://img.shields.io/badge/install-now-white?style=for-the-badge&logo=claude)](https://github.com/Paneon/superpowers-optimized#installation)
 
 </div>
 
@@ -64,7 +64,7 @@ Upon initiating a session with your coding agent, the plugin immediately pauses 
 
 Once the design is approved, the agent constructs a detailed implementation plan that enforces genuine red/green TDD cycles, strict adherence to YAGNI and DRY principles, and token-efficient instructions that eliminate unnecessary verbosity.
 
-When you confirm to proceed, the plugin automatically routes the task to the appropriate workflow—either *subagent-driven-development* or *executing-plans*—and executes it through mandatory staged reviews: first verifying full specification compliance, then assessing code quality, and integrating security analysis (per OWASP guidelines) on any sensitive changes. For complex logic, the *red-team* agent conducts adversarial testing to surface concrete failure scenarios. Each critical finding is automatically converted by the auto-fix pipeline into a failing test, followed by a targeted fix and regression verification.
+When you confirm to proceed, the plugin automatically routes the task to the appropriate workflow—either *subagent-driven-development* or *executing-plans*—and verifies at the altitude that actually catches bugs: each task is gated by its own tests, the project's integration suite runs after each wave/phase, and a single whole-branch review runs before the PR—rather than a reviewer subagent after every task, which is costly and blind to integration regressions. That final review integrates security analysis (per OWASP guidelines) on any sensitive changes; for complex logic, the *red-team* agent conducts adversarial testing to surface concrete failure scenarios. Each critical finding is automatically converted by the auto-fix pipeline into a failing test, followed by a targeted fix and regression verification.
 
 **The agent evaluates relevant skills before every task.** These workflows are enforced as mandatory processes, never optional suggestions. Overhead remains strictly proportional to complexity:
 - **Micro-tasks** bypass all gates entirely
@@ -166,6 +166,8 @@ User sends a prompt
 
 ```
 
+**Curated-docs projects.** When a project keeps a hand-maintained `docs/` tree (detected via `docs/README.md`), the orientation steps above read `docs/` instead of generating or reading `project-map.md`, and the project-map setup prompt is suppressed — a generated map would only duplicate and drift from the curated one. The `project-map.md` memory-stack flow applies to projects *without* curated docs. Everything else — routing, safety hooks, the verification gate, cross-session `state.md` / `known-issues.md` — works identically in both.
+
 ## Research-Informed Design
 
 The design decisions in this fork are informed by three research papers on LLM agent behavior. These papers motivated the approach:
@@ -243,6 +245,8 @@ state.md               ← current task snapshot (never lose mid-work progress)
 ```
 
 ### project-map.md — What exists and what it does
+
+> Skipped in **curated-docs projects** (those with a `docs/README.md`): the curated `docs/` tree is the map, and generating `project-map.md` would only duplicate and drift from it.
 
 Generate once with "map this project". After that, the session-start hook injects its content directly into every session — no instruction-following required. The AI has the map before your first message arrives.
 
@@ -373,12 +377,12 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ### Design & Planning
 - **deliberation** — Structured decision analysis for complex architectural choices: assembles 3–5 named stakeholder perspectives, each speaks once without debate, then surfaces convergence points and live tensions without forcing a premature conclusion. Use before brainstorming when the problem itself may need reframing
 - **brainstorming** — Socratic design refinement with engineering rigor, project-level scope decomposition, and architecture guidance for existing codebases
-- **writing-plans** — Executable implementation plans with exact paths, verification commands, TDD ordering, and pre-execution plan review gate
+- **writing-plans** — Contract-altitude implementation plans: interfaces + the proving test as the durable spec (implementation code illustrative, not transcribed), exact paths, project-defined verification commands, TDD ordering, and inline self-review
 - **claude-md-creator** — Create lean, high-signal CLAUDE/AGENTS context files for repositories
 
 ### Execution
-- **executing-plans** — Batch execution with verification checkpoints and engineering rigor for complex tasks
-- **subagent-driven-development** — Parallel subagent execution with two-stage review gates (spec compliance, then code quality), blocked-task escalation, E2E process hygiene, context isolation, and skill leakage prevention
+- **executing-plans** — Inline execution with a per-phase verification gate and a single pre-PR whole-branch review; engineering rigor for complex tasks
+- **subagent-driven-development** — Parallel subagent execution verifying at the right altitude: the project's integration gate after each wave + one whole-branch review before the PR (no per-task reviewer), inline execution for small/coupled plans, blocked-task escalation, E2E process hygiene, context isolation, and skill leakage prevention
 - **dispatching-parallel-agents** — Concurrent subagent workflows for independent tasks
 - **using-git-worktrees** — Isolated workspace creation on feature branches
 
@@ -438,7 +442,7 @@ This is the full cross-platform hook inventory for the plugin. Claude Code gets 
 
 **Install**
 ```
-/plugin marketplace add REPOZY/superpowers-optimized
+/plugin marketplace add Paneon/superpowers-optimized
 /plugin install superpowers-optimized@superpowers-optimized
 ```
 
@@ -446,7 +450,7 @@ This is the full cross-platform hook inventory for the plugin. Claude Code gets 
 
 `/plugin update superpowers-optimized` opens the plugin manager UI. From there:
 
-1. **Marketplaces** tab → select `REPOZY/superpowers-optimized` → **Update marketplace** (refreshes the version catalog)
+1. **Marketplaces** tab → select `Paneon/superpowers-optimized` → **Update marketplace** (refreshes the version catalog)
 2. **Installed** tab → select `superpowers-optimized` → **Update now**
 
 > **Tip:** To skip manual steps in future, enable **Auto-update** for the marketplace in step 1.
@@ -485,12 +489,12 @@ For live Codex hooks, use `codex-cli 0.118.0` or newer. Older CLI builds may sil
 
 **Install** — tell the agent:
 ```
-Fetch and follow instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.codex/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Paneon/superpowers-optimized/refs/heads/main/.codex/INSTALL.md
 ```
 
 **Update** — tell the agent:
 ```
-Fetch and follow the update instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.codex/INSTALL.md
+Fetch and follow the update instructions from https://raw.githubusercontent.com/Paneon/superpowers-optimized/refs/heads/main/.codex/INSTALL.md
 ```
 
 Or manually: follow the `Updating` section in the linked install doc. A plain `git pull` is not always sufficient for a complete update.
@@ -503,12 +507,12 @@ If the installed Codex copy looks stale, dirty, or inconsistent after update, us
 
 **Install** — tell the agent:
 ```
-Fetch and follow instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.opencode/INSTALL.md
+Fetch and follow instructions from https://raw.githubusercontent.com/Paneon/superpowers-optimized/refs/heads/main/.opencode/INSTALL.md
 ```
 
 **Update** — tell the agent:
 ```
-Fetch and follow the update instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.opencode/INSTALL.md
+Fetch and follow the update instructions from https://raw.githubusercontent.com/Paneon/superpowers-optimized/refs/heads/main/.opencode/INSTALL.md
 ```
 
 Or manually: `git pull` in your local clone of the repository.
@@ -577,6 +581,7 @@ MIT License - see LICENSE file for details
 
 
 **Support**
-- Issues: https://github.com/REPOZY/superpowers-optimized/issues
-- Original: https://github.com/obra/superpowers
-- Discussions: https://github.com/REPOZY/superpowers-optimized/discussions
+- Issues: https://github.com/Paneon/superpowers-optimized/issues
+- Discussions: https://github.com/Paneon/superpowers-optimized/discussions
+
+**Credits** — this is a customization of [REPOZY/superpowers-optimized](https://github.com/REPOZY/superpowers-optimized), itself a fork of the original [obra/superpowers](https://github.com/obra/superpowers) by Jesse Vincent.

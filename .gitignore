@@ -8,6 +8,9 @@ CLAUDE.md
 codex-parity-findings.md
 loss-report.md
 
+# Claude Code plugin runtime marker (created when installed via symlink)
+.in_use/
+
 # AI assistant artifacts
 context-snapshot.json
 project-map.md

@@ -1,5 +1,13 @@
 # Superpowers Optimized Release Notes
 
+## v6.6.2 (2026-06-22)
+
+Stop-hook decision-log reminder no longer makes false claims on spec/plan-only sessions.
+
+### Fixes
+
+**Stop-hook reminder framing split into infra vs design** — v6.6.0 widened the `isSignificantSession` trigger to include `specs/*.md`, `plans/*.md`, and `plugin.universal.yaml`, but the pushed message still said "This session modified core skill/hook/config files." On a brainstorming session that only produced a spec, that claim was literally false — and downstream Claude/Codex agents correctly declined to invoke `context-management`, citing the broken premise. `isSignificantSession()` is now `classifySignificantEdits()` returning `{ infra, design }`. Infra edits (skill/hook/config/agent/plugin-manifest) still push the "Decision log" reminder, accurately scoped. Spec/plan edits now push a new "Project model sync" reminder framed around the real gap — the spec/plan itself is the decision log; what's missing is propagation to `project-map.md`, `state.md`, and related docs. The Codex stop-adapter is unaffected (its narrower SIG_PATTERNS doesn't include specs/plans, so its existing wording remains accurate to what it actually fires on). OpenCode has no equivalent hook surface in its plugin API.
+
 ## v6.6.1 (2026-05-08)
 
 Context pressure gate, Tailwind v4 reference, plan-level security flag, stub scan, and cleaner docs paths.

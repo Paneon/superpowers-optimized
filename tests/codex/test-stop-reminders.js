@@ -189,9 +189,13 @@ test('Commit reminder suppressed when all session edits are committed (git clean
   }
 });
 
-// ── isSignificantSession pattern coverage ────────────────────────────────────
+// ── classifySignificantEdits pattern coverage ────────────────────────────────
+// Infra edits (skill/hook/config/agent/manifest) → "Decision log" reminder.
+// Design edits (specs/plans) → "Project model sync" reminder. They are framed
+// differently because the spec/plan IS the decision log; what's missing after
+// a spec change is the propagation to project-map.md / state.md / docs.
 
-console.log('\nisSignificantSession pattern coverage');
+console.log('\nclassifySignificantEdits pattern coverage');
 
 test('Detects SKILL.md edits', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
@@ -219,27 +223,33 @@ test('Detects hooks/*.js edits', () => {
   }
 });
 
-test('Detects specs/*.md edits (new pattern)', () => {
+test('Detects specs/*.md edits → project model sync reminder (not decision log)', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
     writeRecentEdit(logDir, 'docs/specs/test-spec.md');
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     const reason = result.reason || '';
-    assert.ok(reason.includes('Decision log'), `specs/*.md edit should trigger decision log: ${reason}`);
+    assert.ok(reason.includes('Project model sync'),
+      `specs/*.md edit should trigger project model sync reminder: ${reason}`);
+    assert.ok(!reason.includes('Decision log'),
+      `specs/*.md edit should NOT use the decision-log framing (the spec IS the decision log): ${reason}`);
   } finally {
     cleanup(homeDir, cwdDir);
   }
 });
 
-test('Detects plans/*.md edits (new pattern)', () => {
+test('Detects plans/*.md edits → project model sync reminder (not decision log)', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
     writeRecentEdit(logDir, 'docs/plans/test-plan.md');
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     const reason = result.reason || '';
-    assert.ok(reason.includes('Decision log'), `plans/*.md edit should trigger decision log: ${reason}`);
+    assert.ok(reason.includes('Project model sync'),
+      `plans/*.md edit should trigger project model sync reminder: ${reason}`);
+    assert.ok(!reason.includes('Decision log'),
+      `plans/*.md edit should NOT use the decision-log framing (the plan IS the decision log): ${reason}`);
   } finally {
     cleanup(homeDir, cwdDir);
   }
@@ -265,7 +275,10 @@ test('Does NOT trigger for regular source file edits', () => {
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     const reason = result.reason || '';
-    assert.ok(!reason.includes('Decision log'), `Regular source file should NOT trigger decision log: ${reason}`);
+    assert.ok(!reason.includes('Decision log'),
+      `Regular source file should NOT trigger decision log: ${reason}`);
+    assert.ok(!reason.includes('Project model sync'),
+      `Regular source file should NOT trigger project model sync: ${reason}`);
   } finally {
     cleanup(homeDir, cwdDir);
   }

@@ -283,23 +283,39 @@ function generateReminders(edits, cwd) {
 
 
 /**
- * Detect sessions where significant architectural decisions were made.
- * These are sessions that modified skill files, hooks, or plugin config —
- * places where the "why" matters and would be costly to rediscover.
+ * Classify significant edits into two categories with distinct follow-ups:
+ *
+ *   infra  — skill, hook, config, agent, or plugin-manifest files. The
+ *            rationale behind these changes is otherwise lost; warrants
+ *            a [saved] decision-log entry.
+ *
+ *   design — spec or plan files. The artifact ITSELF captures the
+ *            decisions; the gap is that the project model (project-map.md,
+ *            state.md, related docs/) is now likely out of sync with the
+ *            new shape and should be reconciled.
+ *
+ * Conflating the two produces misleading reminders (e.g. claiming
+ * "skill/hook/config files were modified" when only a spec changed),
+ * which lets downstream agents dismiss the hook as factually wrong.
  */
-function isSignificantSession(edits) {
-  const sigPatterns = [
+function classifySignificantEdits(edits) {
+  const infraPatterns = [
     /SKILL\.md$/i,
     /[/\\]hooks[/\\][^/\\]+\.js$/,
     /[/\\]hooks[/\\]session-start$/,
     /skill-rules\.json$/,
     /CLAUDE\.md$/i,
     /agents[/\\][^/\\]+\.md$/i,
-    /[/\\]specs[/\\][^/\\]+\.md$/i,
-    /[/\\]plans[/\\][^/\\]+\.md$/i,
     /plugin\.universal\.yaml$/,
   ];
-  return edits.some(e => sigPatterns.some(p => p.test(e.filePath)));
+  const designPatterns = [
+    /[/\\]specs[/\\][^/\\]+\.md$/i,
+    /[/\\]plans[/\\][^/\\]+\.md$/i,
+  ];
+  return {
+    infra: edits.some(e => infraPatterns.some(p => p.test(e.filePath))),
+    design: edits.some(e => designPatterns.some(p => p.test(e.filePath))),
+  };
 }
 
 /**
@@ -407,12 +423,22 @@ function evaluatePayload(data) {
   // work phases keep getting reminded until each phase is explicitly documented.
   const lastSavedTime = getLastSavedEntryTime();
   const editsSinceLastSaved = getEditsAfter(lastSavedTime, sessionId);
-  if (isSignificantSession(editsSinceLastSaved)) {
+  const { infra, design } = classifySignificantEdits(editsSinceLastSaved);
+  if (infra) {
     reminders.push(
-      'Decision log: This session modified core skill/hook/config files. ' +
+      'Decision log: This session modified skill, hook, config, agent, or plugin-manifest files. ' +
       'Before stopping, invoke context-management via the Skill tool to write a [saved] entry ' +
       'capturing decisions, rationale, and rejected approaches. ' +
       'Future sessions start with zero context — this is the only way to preserve the "why".'
+    );
+  }
+  if (design) {
+    reminders.push(
+      'Project model sync: This session modified spec or plan files. The spec/plan itself ' +
+      'captures decisions and rationale — but downstream artifacts (project-map.md, state.md, ' +
+      'related docs/) may now be out of sync with the new shape. Before stopping, invoke ' +
+      'context-management via the Skill tool to update the project model and any internal docs ' +
+      'so future sessions are anchored to current reality, not the prior plan.'
     );
   }
 

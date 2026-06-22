@@ -48,4 +48,9 @@ pass "tsc build succeeded"
 bash "$HERE/test-extension-loads.sh" >/dev/null || fail "extension-loads test failed"
 pass "extension registers all expected lifecycle subscribers"
 
+# --- T4–T9: Lifecycle adapter dispatch (session_start, before_agent_start,
+#            tool_call, tool_result, input, agent_end) ---
+echo "→ T4–T9: Lifecycle adapter dispatch end-to-end"
+bash "$HERE/test-adapter-dispatch.sh" || fail "adapter dispatch test failed"
+
 echo "== All Pi tests passed =="

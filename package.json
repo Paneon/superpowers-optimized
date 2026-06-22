@@ -1,0 +1,15 @@
+{
+  "name": "superpowers-optimized",
+  "version": "6.6.2",
+  "private": true,
+  "description": "Build tooling for the Pi (pi.dev) extension. Skills/hooks for Claude/Codex/OpenCode require no Node tooling.",
+  "scripts": {
+    "build": "tsc -p .",
+    "build:watch": "tsc -p . --watch",
+    "test:pi": "bash tests/pi/run-tests.sh",
+    "test:smart-compress": "bash tests/smart-compress/run-tests.sh"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

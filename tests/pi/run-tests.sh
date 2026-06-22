@@ -40,4 +40,12 @@ node -e "
 pass "pi present in meta.platforms"
 pass "extensions.pi.install_path and extension_path defined"
 
+# --- T3: Pi extension entry-point loads against mocked ExtensionAPI ---
+echo "→ T3: Pi extension loads and registers expected subscribers"
+( cd "$REPO" && npm run build --silent ) >/dev/null || fail "tsc build failed"
+pass "tsc build succeeded"
+
+bash "$HERE/test-extension-loads.sh" >/dev/null || fail "extension-loads test failed"
+pass "extension registers all expected lifecycle subscribers"
+
 echo "== All Pi tests passed =="

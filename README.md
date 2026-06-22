@@ -1,6 +1,6 @@
 <div align="center">
 
-[![AI Coding Agents](https://img.shields.io/badge/USE_WITH-Claude_Code_%7C_Codex_%7C_OpenCode_%7C_Gemini_CLI_%7C_Antigravity-white?style=for-the-badge)]()
+[![AI Coding Agents](https://img.shields.io/badge/USE_WITH-Claude_Code_%7C_Codex_%7C_Pi_%7C_OpenCode_%7C_Gemini_CLI_%7C_Antigravity-white?style=for-the-badge)]()
 
 [![GitHub stars](https://img.shields.io/github/stars/Paneon/superpowers-optimized?style=for-the-badge&color=white)](https://github.com/Paneon/superpowers-optimized/stargazers)
 [![Version](https://img.shields.io/github/v/release/Paneon/superpowers-optimized?style=for-the-badge&color=white)](https://github.com/Paneon/superpowers-optimized/releases)
@@ -46,7 +46,9 @@ The agent will automatically route to the correct workflow, apply safety guards,
 See [Installation](#installation) for install, update, and uninstall commands on all platforms.
 
 > [!NOTE]
-> **Codex parity boundary:** Claude Code gets the full 10-hook lifecycle. Codex now has verified live support for `SessionStart`, `UserPromptSubmit`, and `PreToolUse(Bash)` on macOS/Linux with `codex_hooks = true` and `codex-cli 0.118.0+` (tested on `0.118.0`). This repo now also ships a Codex-specific `PostToolUse(Bash)` smart-compress hook that can replace noisy Bash output after execution using the existing compression rules. `Stop` is implemented for Codex, but visible reminder surfacing should still be revalidated after install/update. Codex still does **not** expose Claude's `PostToolUse(Edit|Write|Skill)`, `SubagentStop`, `Read/Edit/Write` interception, or Claude's pre-execution Bash rewrite path, so full Claude parity is not possible today.
+> **Platform parity boundary:** Claude Code gets the full 10-hook lifecycle. Codex now has verified live support for `SessionStart`, `UserPromptSubmit`, and `PreToolUse(Bash)` on macOS/Linux with `codex_hooks = true` and `codex-cli 0.118.0+` (tested on `0.118.0`). This repo now also ships a Codex-specific `PostToolUse(Bash)` smart-compress hook that can replace noisy Bash output after execution using the existing compression rules. `Stop` is implemented for Codex, but visible reminder surfacing should still be revalidated after install/update. Codex still does **not** expose Claude's `PostToolUse(Edit|Write|Skill)`, `SubagentStop`, `Read/Edit/Write` interception, or Claude's pre-execution Bash rewrite path, so full Claude parity is not possible on Codex today.
+>
+> **Pi (pi.dev)** integrates via a Pi-native TypeScript extension at `hooks/pi/` against Pi's actual documented event contract (audited 2026-06-22): 5 lifecycle subscribers cover session_start, before_agent_start, tool_call, tool_result, and agent_end. Tool blocking returns `{ block: true, reason }`; Bash transforms mutate `event.input` in place; tool-output compression returns `{ content }`; reminders surface via `ctx.ui.notify`; `permissionDecision: "ask"` from any hook routes to `ctx.ui.confirm`. Two Claude hooks are intentionally not wired: `SubagentStop` (Pi has no sub-agents) and `PostToolUse(Skill)` (Pi expands skills natively without surfacing it to extensions, so session-stats stay Claude-only). Compiled JS shipped in `hooks/pi/dist/`; JS hook bodies are reused unchanged. See [docs/platforms/pi.md](docs/platforms/pi.md).
 
 ---
 
@@ -503,6 +505,23 @@ If the installed Codex copy looks stale, dirty, or inconsistent after update, us
 
 ---
 
+### Pi (pi.dev)
+
+Skills + Pi-native lifecycle hooks via a compiled TypeScript extension. Requires Node.js ≥ 18.
+
+**Install** — tell the agent:
+```
+Fetch and follow instructions from https://raw.githubusercontent.com/Paneon/superpowers-optimized/refs/heads/main/.pi/INSTALL.md
+```
+
+**Update** — tell the agent:
+```
+Fetch and follow the update instructions from https://raw.githubusercontent.com/Paneon/superpowers-optimized/refs/heads/main/.pi/INSTALL.md
+```
+
+Or manually: `git pull` + `npm install && npm run build` in your local clone (rebuilds the shipped `hooks/pi/dist/`). See [docs/platforms/pi.md](docs/platforms/pi.md) for the full parity table.
+
+
 ### OpenCode
 
 **Install** — tell the agent:
@@ -524,13 +543,13 @@ You will be **automatically notified** when a new version is available in Claude
 
 ![](media/UpdatedAvailable.png)
 
-OpenCode, Codex, and Gemini CLI perform a best-effort startup update check once per 24 hours.
+OpenCode, Codex, Pi, and Gemini CLI perform a best-effort startup update check once per 24 hours (Pi via the same Codex `session-start-adapter.js` invoked from the Pi extension).
 
 Auto-update is non-destructive: it only applies when the plugin clone is clean and can fast-forward to `origin/main` (`git merge --ff-only origin/main`).
 If the repo is dirty, ahead, or diverged, auto-update is skipped and manual `git pull` remains the fallback.
 For Codex, SessionStart update notices require `codex_hooks = true`, `~/.codex/hooks.json` setup, `codex-cli 0.118.0+`, and a non-Windows environment.
 
-To disable startup auto-update checks for Codex/OpenCode/Gemini CLI:
+To disable startup auto-update checks for Codex/OpenCode/Pi/Gemini CLI:
 
 1. Set env var `SUPERPOWERS_AUTO_UPDATE=0`, or
 2. Create `~/.config/superpowers/update.conf` with:

@@ -11,7 +11,7 @@ meta:
   repository: "https://github.com/Paneon/superpowers-optimized"
   license: "MIT"
   keywords: ["skills", "tdd", "debugging", "code-review", "workflows", "agentic", "token-efficiency", "hooks", "safety", "subagent"]
-  platforms: [claude-code, codex]
+  platforms: [claude-code, codex, pi]
 
 hooks:
   # --- SessionStart ---
@@ -127,3 +127,10 @@ extensions:
     description: "Structured workflow skills for Codex — systematic debugging, TDD, brainstorming, code review, and 30+ expert workflows. Skills work on all platforms. Lifecycle hooks (routing, safety, reminders) require separate setup on macOS/Linux."
     display_name: "Superpowers Optimized"
     short_description: "30+ expert workflow skills — debugging, TDD, code review, brainstorming, and more"
+
+  pi:
+    install_path: "$HOME/.pi/agent/skills/{meta.name}"
+    extension_path: "$HOME/.pi/agent/extensions/{meta.name}"
+    description: "Claude-parity for Pi (pi.dev): 24 skills + 9 of 10 lifecycle hooks via a Pi-native extension. SubagentStop has no Pi equivalent (Pi has no sub-agent concept). The extension is shipped as compiled JS in hooks/pi/dist/ — symlink that directory into ~/.pi/agent/extensions/."
+    display_name: "Superpowers Optimized"
+    short_description: "30+ expert workflow skills + safety/routing/compression hooks"

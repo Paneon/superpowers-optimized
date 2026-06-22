@@ -53,4 +53,28 @@ pass "extension registers all expected lifecycle subscribers"
 echo "→ T4–T9: Lifecycle adapter dispatch end-to-end"
 bash "$HERE/test-adapter-dispatch.sh" || fail "adapter dispatch test failed"
 
+# --- T10/T11/T12: Distribution surface (install doc, platform doc, README) ---
+echo "→ T10–T12: Distribution surface"
+[ -f "$REPO/.pi/INSTALL.md" ]                            || fail ".pi/INSTALL.md missing"
+grep -q "~/.pi/agent/skills"     "$REPO/.pi/INSTALL.md"  || fail ".pi/INSTALL.md missing skills symlink target"
+grep -q "~/.pi/agent/extensions" "$REPO/.pi/INSTALL.md"  || fail ".pi/INSTALL.md missing extension symlink target"
+grep -q "hooks/pi/dist"          "$REPO/.pi/INSTALL.md"  || fail ".pi/INSTALL.md must symlink the compiled dist/, not the TS source"
+pass ".pi/INSTALL.md present and points at compiled dist"
+
+[ -f "$REPO/docs/platforms/pi.md" ]                        || fail "docs/platforms/pi.md missing"
+grep -q ".pi/INSTALL.md"   "$REPO/docs/platforms/pi.md"   || fail "docs/platforms/pi.md must link to .pi/INSTALL.md"
+grep -q "SubagentStop"     "$REPO/docs/platforms/pi.md"   || fail "docs/platforms/pi.md must document SubagentStop gap"
+pass "docs/platforms/pi.md present and documents the SubagentStop gap"
+
+grep -q "USE_WITH-.*Pi"          "$REPO/README.md" || fail "README badge missing Pi"
+grep -q "### Pi (pi.dev)"        "$REPO/README.md" || fail "README missing ### Pi (pi.dev) install subsection"
+grep -q ".pi/INSTALL.md"         "$REPO/README.md" || fail "README install subsection must link .pi/INSTALL.md"
+grep -q "9 of 10"                "$REPO/README.md" || fail "README parity callout must mention 9 of 10 hooks"
+pass "README badge, install subsection, and parity callout present"
+
+# --- T13: Install-path smoke test (symlinks + extension load) ---
+echo "→ T13: Symlinked install resolves through Pi's discovery paths"
+bash "$HERE/test-install-smoke.sh" || fail "install smoke test failed"
+pass "skills + extension resolve through the documented symlinks"
+
 echo "== All Pi tests passed =="

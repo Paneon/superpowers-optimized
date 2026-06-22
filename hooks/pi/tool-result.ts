@@ -1,54 +1,52 @@
-import type { ExtensionAPI, ToolResultEvent } from './types';
+import type {
+  ExtensionAPI, ToolResultEvent, ToolResultReturn, ExtensionContext,
+} from './types';
 import { runJsHook, readEnvelope, envelopeText } from './utils';
 
-// Claude's PostToolUse fires on Edit|Write (track-edits.js) and on Skill
-// (track-session-stats.js). Pi has no Skill tool — skill expansion is the
-// `input` event, handled by hooks/pi/input.ts. Here we cover Edit/Write
-// (track-edits) and Bash post-execution compression.
+// Pi's tool_result return shape is a partial patch: { content?, details?, isError? }.
+// Pi MERGES these fields into the tool result the agent then sees. So
+// PostToolUse(Bash) smart-compression DOES work on Pi — we return
+// { content: <compressed> } to replace the verbose output.
 //
-// Note on Bash post-execution compression: Claude/Codex replace the tool's
-// output stream with the compressed text. Pi's tool_result event has no
-// return path to mutate the result Pi already gave the agent, so we
-// surface the compressed summary via api.injectContext — the agent sees
-// the summary as supplemental context alongside (not in place of) the
-// original output. docs/platforms/pi.md notes this is ⚠️ context-only on Pi.
-
-// Script paths can be overridden via env for hermetic testing. Real
-// Pi installs never set these.
+// Script paths can be overridden via env for hermetic testing.
 const TRACK_EDITS            = process.env.PI_TRACK_EDITS_SCRIPT            || 'hooks/track-edits.js';
 const POSTTOOL_BASH_COMPRESS = process.env.PI_POSTTOOL_BASH_COMPRESS_SCRIPT || 'hooks/codex/posttool-bash-compress-adapter.js';
 
 const EDIT_TOOLS = new Set(['Edit', 'Write']);
 
 export function register(api: ExtensionAPI): void {
-  api.on('tool_result', async (evt: ToolResultEvent) => {
+  api.on('tool_result', async (
+    evt: ToolResultEvent,
+    ctx: ExtensionContext,
+  ): Promise<ToolResultReturn | void> => {
     const payload: Record<string, unknown> = {
       tool_name: evt.toolName,
-      tool_input: evt.params,
-      tool_response: evt.result,
-      session_id: evt.sessionId,
-      cwd: process.cwd(),
+      tool_input: evt.input,
+      tool_response: { stdout: evt.content, isError: evt.isError, details: evt.details },
+      session_id: evt.toolCallId,
+      cwd: ctx.cwd ?? process.cwd(),
     };
 
     try {
       if (EDIT_TOOLS.has(evt.toolName)) {
+        // Tracking is observational — fire-and-forget, never patch.
         await runJsHook(TRACK_EDITS, payload, { timeoutMs: 2000 });
         return;
       }
 
       if (evt.toolName === 'Bash') {
         const { stdout } = await runJsHook(POSTTOOL_BASH_COMPRESS, payload, { timeoutMs: 2000 });
-        // posttool-bash-compress emits both shapes: { decision, reason } AND
-        // { hookSpecificOutput: { additionalContext } }. envelopeText picks
-        // the first available source. We pass '' as rawStdout so a non-JSON
-        // hook output is NOT surfaced — only structured envelopes count here.
+        // Hook emits either { hookSpecificOutput: { additionalContext } } or
+        // legacy { decision, reason }. envelopeText picks the first source;
+        // '' as rawStdout means we DO NOT surface non-JSON output here.
         const compressed = envelopeText(readEnvelope(stdout));
-        if (compressed && api.injectContext) {
-          api.injectContext(compressed);
+        if (compressed) {
+          return { content: compressed };
         }
       }
     } catch {
       // Tracking failures must never block the agent loop.
     }
+    return;
   });
 }

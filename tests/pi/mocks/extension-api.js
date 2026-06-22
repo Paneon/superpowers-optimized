@@ -1,20 +1,45 @@
 'use strict';
 
-// Minimal stand-in for Pi's ExtensionAPI used by hermetic tests.
-// Records all subscriber registrations, log calls, and surface calls
-// so tests can assert what the extension did without a real Pi runtime.
+// Hermetic stand-in for Pi's ExtensionAPI + ExtensionContext.
+// Records subscriber registrations and every ctx surface call so tests
+// can assert side effects. `fire()` is test-only and intentionally
+// outside the production ExtensionAPI interface in hooks/pi/types.ts.
 
-function create() {
+function create({ confirmAnswer = true, cwd = process.cwd() } = {}) {
   const handlers = Object.create(null);
   const logCalls = [];
-  const contextInjections = [];
-  const reminderInjections = [];
+  const notifications = [];        // ctx.ui.notify(...)
+  const confirms = [];             // ctx.ui.confirm(...) — calls recorded
+  const statusCalls = [];          // ctx.ui.setStatus(...)
+
+  const ctx = {
+    cwd,
+    mode: 'tui',
+    hasUI: true,
+    ui: {
+      confirm(title, message) {
+        confirms.push({ title, message });
+        const answer = typeof confirmAnswer === 'function'
+          ? confirmAnswer(title, message)
+          : confirmAnswer;
+        return Promise.resolve(Boolean(answer));
+      },
+      notify(message, level) {
+        notifications.push({ message: String(message), level: level || 'info' });
+      },
+      setStatus(key, text) {
+        statusCalls.push({ key, text: String(text) });
+      },
+    },
+  };
 
   const api = {
     handlers,
     logCalls,
-    contextInjections,
-    reminderInjections,
+    notifications,
+    confirms,
+    statusCalls,
+    ctx,
 
     on(event, handler) {
       if (!handlers[event]) handlers[event] = [];
@@ -25,25 +50,16 @@ function create() {
       logCalls.push(String(msg));
     },
 
-    injectContext(text) {
-      contextInjections.push(String(text));
-    },
-
-    injectReminder(text) {
-      reminderInjections.push(String(text));
-    },
-
     // Test helper: drive an event through registered handlers and collect
-    // their return values (used to assert tool_call decisions).
+    // their return values (used to assert tool_call / tool_result patches).
     //
     // NOTE: `fire()` is test-only and intentionally outside the production
-    // ExtensionAPI interface in hooks/pi/types.ts. The real Pi runtime
-    // dispatches events; our adapters never call `api.fire`.
+    // ExtensionAPI interface. The real Pi runtime dispatches events.
     async fire(event, payload) {
       const hs = handlers[event] || [];
       const results = [];
       for (const h of hs) {
-        results.push(await Promise.resolve(h(payload)));
+        results.push(await Promise.resolve(h(payload, ctx)));
       }
       return results;
     },

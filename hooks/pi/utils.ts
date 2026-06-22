@@ -103,7 +103,8 @@ export interface HookResult {
 export interface HookEnvelope {
   // From hookSpecificOutput
   additionalContext?: string;
-  permissionDecision?: 'allow' | 'deny';
+  /** Claude's three-valued decision. 'ask' surfaces via ctx.ui.confirm() on Pi. */
+  permissionDecision?: 'allow' | 'deny' | 'ask';
   permissionDecisionReason?: string;
   updatedInput?: Record<string, unknown>;
   // From the legacy top-level envelope (stop-reminders, posttool-bash-compress)
@@ -119,7 +120,7 @@ export function readEnvelope(stdout: string): HookEnvelope | null {
   if (hso && typeof hso === 'object') {
     const h = hso as Record<string, unknown>;
     if (typeof h.additionalContext === 'string') env.additionalContext = h.additionalContext;
-    if (h.permissionDecision === 'allow' || h.permissionDecision === 'deny') {
+    if (h.permissionDecision === 'allow' || h.permissionDecision === 'deny' || h.permissionDecision === 'ask') {
       env.permissionDecision = h.permissionDecision;
     }
     if (typeof h.permissionDecisionReason === 'string') {

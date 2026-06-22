@@ -127,7 +127,7 @@ function readEnvelope(stdout) {
         const h = hso;
         if (typeof h.additionalContext === 'string')
             env.additionalContext = h.additionalContext;
-        if (h.permissionDecision === 'allow' || h.permissionDecision === 'deny') {
+        if (h.permissionDecision === 'allow' || h.permissionDecision === 'deny' || h.permissionDecision === 'ask') {
             env.permissionDecision = h.permissionDecision;
         }
         if (typeof h.permissionDecisionReason === 'string') {

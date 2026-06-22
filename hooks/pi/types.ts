@@ -1,70 +1,112 @@
 // Pi (pi.dev) lifecycle event types and ExtensionAPI shape.
-// This is our interpretation of Pi's documented contract — narrow it as
-// pi.dev's API stabilises. The mocked ExtensionAPI in tests/pi/mocks/
-// implements the same surface for hermetic testing.
+//
+// These types reflect Pi's actual documented contract as of 2026-06-22
+// (https://pi.dev/docs/latest/extensions). Adapters return what Pi will
+// honor; the mocked ExtensionAPI in tests/pi/mocks/extension-api.js
+// implements the same surface.
+//
+// Earlier drafts of this file invented shapes (api.injectContext / api.injectReminder /
+// ToolCallDecision with allow:boolean+transformedParams). Pi ignores all of those.
+// The audit + rewrite is captured in git history.
 
-export type LifecycleEvent =
-  | 'session_start'
-  | 'before_agent_start'
-  | 'input'
-  | 'tool_call'
-  | 'tool_result'
-  | 'agent_end';
+export type SessionStartReason = 'startup' | 'reload' | 'new' | 'resume' | 'fork';
 
 export interface SessionStartEvent {
-  sessionId?: string;
-  cwd?: string;
-  source?: 'startup' | 'resume' | 'clear' | 'compact';
+  reason: SessionStartReason;
+  previousSessionFile?: string;
 }
 
 export interface BeforeAgentStartEvent {
-  sessionId?: string;
   prompt: string;
-  cwd?: string;
+  images?: unknown[];
+  systemPrompt?: string;
+  systemPromptOptions?: Record<string, unknown>;
+}
+
+export interface BeforeAgentStartReturn {
+  message?: string;
+  systemPrompt?: string;
 }
 
 export interface InputEvent {
-  sessionId?: string;
+  text: string;
+  images?: unknown[];
+  source?: string;
+  streamingBehavior?: string;
+}
+
+export interface InputReturn {
+  action: 'continue' | 'transform' | 'handled';
   text?: string;
-  skillExpansion?: { skill: string };
 }
 
 export interface ToolCallEvent {
-  sessionId?: string;
   toolName: string;
-  params: Record<string, unknown>;
+  toolCallId: string;
+  /** Mutable. Mutate in place to patch tool arguments before execution. */
+  input: Record<string, unknown>;
+}
+
+export interface ToolCallReturn {
+  block: true;
+  reason?: string;
 }
 
 export interface ToolResultEvent {
-  sessionId?: string;
   toolName: string;
-  params: Record<string, unknown>;
-  result?: unknown;
+  toolCallId: string;
+  input: Record<string, unknown>;
+  content?: string;
+  details?: unknown;
+  isError?: boolean;
+}
+
+/** Partial patch — Pi merges these fields into the tool result the agent sees. */
+export interface ToolResultReturn {
+  content?: string;
+  details?: unknown;
+  isError?: boolean;
 }
 
 export interface AgentEndEvent {
-  sessionId?: string;
-  cwd?: string;
-  lastAssistantMessage?: string;
+  messages?: unknown[];
 }
 
-// Handler return shape for tool_call: allow/block decision.
-// Returning undefined or { allow: true } passes the call through unchanged.
-// transformedParams replaces the params Pi sends to the tool.
-export interface ToolCallDecision {
-  allow: boolean;
-  reason?: string;
-  transformedParams?: Record<string, unknown>;
-}
-
+// Subset of Pi's ExtensionAPI that we actually use. Pi exposes many more
+// methods (sendMessage, registerTool, registerCommand, etc.) — we model
+// only what the extension calls.
 export interface ExtensionAPI {
-  on(event: 'session_start',       handler: (e: SessionStartEvent)       => void | Promise<void>): void;
-  on(event: 'before_agent_start',  handler: (e: BeforeAgentStartEvent)  => void | Promise<void>): void;
-  on(event: 'input',               handler: (e: InputEvent)              => void | Promise<void>): void;
-  on(event: 'tool_call',           handler: (e: ToolCallEvent)           => ToolCallDecision | void | Promise<ToolCallDecision | void>): void;
-  on(event: 'tool_result',         handler: (e: ToolResultEvent)         => void | Promise<void>): void;
-  on(event: 'agent_end',           handler: (e: AgentEndEvent)           => void | Promise<void>): void;
-  log?(msg: string): void;
-  injectContext?(text: string): void;
-  injectReminder?(text: string): void;
+  on(event: 'session_start',
+     handler: (e: SessionStartEvent, ctx: ExtensionContext) => void | Promise<void>): void;
+  on(event: 'before_agent_start',
+     handler: (e: BeforeAgentStartEvent, ctx: ExtensionContext) =>
+       void | BeforeAgentStartReturn | Promise<void | BeforeAgentStartReturn>): void;
+  on(event: 'input',
+     handler: (e: InputEvent, ctx: ExtensionContext) =>
+       void | InputReturn | Promise<void | InputReturn>): void;
+  on(event: 'tool_call',
+     handler: (e: ToolCallEvent, ctx: ExtensionContext) =>
+       void | ToolCallReturn | Promise<void | ToolCallReturn>): void;
+  on(event: 'tool_result',
+     handler: (e: ToolResultEvent, ctx: ExtensionContext) =>
+       void | ToolResultReturn | Promise<void | ToolResultReturn>): void;
+  on(event: 'agent_end',
+     handler: (e: AgentEndEvent, ctx: ExtensionContext) => void | Promise<void>): void;
+}
+
+// Subset of Pi's per-handler context (`ctx`, the second argument). Adapters
+// use ctx.ui.confirm() for tool-call ask-decisions and ctx.ui.notify() for
+// surfacing stop-reminders.
+export interface ExtensionUI {
+  confirm(title: string, message: string): Promise<boolean>;
+  notify(message: string, level?: 'info' | 'warning' | 'error'): void;
+  setStatus?(key: string, text: string): void;
+}
+
+export interface ExtensionContext {
+  ui: ExtensionUI;
+  cwd?: string;
+  signal?: AbortSignal;
+  hasUI?: boolean;
+  mode?: 'tui' | 'rpc' | 'json' | 'print';
 }

@@ -69,7 +69,7 @@ pass "docs/platforms/pi.md present and documents the SubagentStop gap"
 grep -q "USE_WITH-.*Pi"          "$REPO/README.md" || fail "README badge missing Pi"
 grep -q "### Pi (pi.dev)"        "$REPO/README.md" || fail "README missing ### Pi (pi.dev) install subsection"
 grep -q ".pi/INSTALL.md"         "$REPO/README.md" || fail "README install subsection must link .pi/INSTALL.md"
-grep -q "9 of 10"                "$REPO/README.md" || fail "README parity callout must mention 9 of 10 hooks"
+grep -q "ctx.ui"                 "$REPO/README.md" || fail "README parity callout must reference ctx.ui (Pi's confirm/notify surface)"
 pass "README badge, install subsection, and parity callout present"
 
 # --- T13: Install-path smoke test (symlinks + extension load) ---

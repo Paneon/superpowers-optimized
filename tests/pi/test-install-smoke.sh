@@ -44,7 +44,7 @@ node -e "
   const factory = require('$EXT_PATH').default;
   if (typeof factory !== 'function') { console.error('FAIL: default export not a function'); process.exit(1); }
   factory(api);
-  const want = ['session_start','before_agent_start','input','tool_call','tool_result','agent_end'];
+  const want = ['session_start','before_agent_start','tool_call','tool_result','agent_end'];
   const missing = want.filter(e => !api.handlers[e] || api.handlers[e].length === 0);
   if (missing.length) { console.error('FAIL: missing through symlink:', missing.join(',')); process.exit(1); }
 "

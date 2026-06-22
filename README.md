@@ -48,7 +48,7 @@ See [Installation](#installation) for install, update, and uninstall commands on
 > [!NOTE]
 > **Platform parity boundary:** Claude Code gets the full 10-hook lifecycle. Codex now has verified live support for `SessionStart`, `UserPromptSubmit`, and `PreToolUse(Bash)` on macOS/Linux with `codex_hooks = true` and `codex-cli 0.118.0+` (tested on `0.118.0`). This repo now also ships a Codex-specific `PostToolUse(Bash)` smart-compress hook that can replace noisy Bash output after execution using the existing compression rules. `Stop` is implemented for Codex, but visible reminder surfacing should still be revalidated after install/update. Codex still does **not** expose Claude's `PostToolUse(Edit|Write|Skill)`, `SubagentStop`, `Read/Edit/Write` interception, or Claude's pre-execution Bash rewrite path, so full Claude parity is not possible on Codex today.
 >
-> **Pi (pi.dev)** reaches near-Claude parity via a Pi-native TypeScript extension at `hooks/pi/`: 9 of 10 lifecycle hooks (session_start, before_agent_start, input, tool_call, tool_result, agent_end). The one missing hook is `SubagentStop` — Pi explicitly omits sub-agents, so there is nothing to guard. The extension is shipped as compiled JS (`hooks/pi/dist/`) and reuses the same JS hook bodies Claude runs, so behavior stays consistent across platforms. See [docs/platforms/pi.md](docs/platforms/pi.md).
+> **Pi (pi.dev)** integrates via a Pi-native TypeScript extension at `hooks/pi/` against Pi's actual documented event contract (audited 2026-06-22): 5 lifecycle subscribers cover session_start, before_agent_start, tool_call, tool_result, and agent_end. Tool blocking returns `{ block: true, reason }`; Bash transforms mutate `event.input` in place; tool-output compression returns `{ content }`; reminders surface via `ctx.ui.notify`; `permissionDecision: "ask"` from any hook routes to `ctx.ui.confirm`. Two Claude hooks are intentionally not wired: `SubagentStop` (Pi has no sub-agents) and `PostToolUse(Skill)` (Pi expands skills natively without surfacing it to extensions, so session-stats stay Claude-only). Compiled JS shipped in `hooks/pi/dist/`; JS hook bodies are reused unchanged. See [docs/platforms/pi.md](docs/platforms/pi.md).
 
 ---
 
@@ -507,7 +507,7 @@ If the installed Codex copy looks stale, dirty, or inconsistent after update, us
 
 ### Pi (pi.dev)
 
-Full Claude-parity tier: skills + 9 of 10 lifecycle hooks via a Pi-native extension. Requires Node.js ≥ 18.
+Skills + Pi-native lifecycle hooks via a compiled TypeScript extension. Requires Node.js ≥ 18.
 
 **Install** — tell the agent:
 ```

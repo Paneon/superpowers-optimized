@@ -22,4 +22,22 @@ if "$HERE/validate-skill-frontmatter.sh" "$HERE/fixtures" >/dev/null 2>&1; then
 fi
 pass "validator rejected bad-skill fixture"
 
+# --- T2: pi registered in plugin.universal.yaml ---
+echo "→ T2: pi platform registered in plugin.universal.yaml"
+node -e "
+  const yaml = require('js-yaml');
+  const fs = require('fs');
+  const y = yaml.load(fs.readFileSync('$REPO/plugin.universal.yaml', 'utf8'));
+  if (!y.meta || !Array.isArray(y.meta.platforms) || !y.meta.platforms.includes('pi')) {
+    throw new Error('pi missing from meta.platforms');
+  }
+  if (!y.extensions || !y.extensions.pi) {
+    throw new Error('extensions.pi block missing');
+  }
+  if (!y.extensions.pi.install_path)   throw new Error('extensions.pi.install_path missing');
+  if (!y.extensions.pi.extension_path) throw new Error('extensions.pi.extension_path missing');
+" || fail "manifest assertions failed"
+pass "pi present in meta.platforms"
+pass "extensions.pi.install_path and extension_path defined"
+
 echo "== All Pi tests passed =="

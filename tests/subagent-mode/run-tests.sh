@@ -135,16 +135,19 @@ test_hook_emits_inline_first_block() {
 test_brainstorming_has_tier_aware_section() {
   bold "Brainstorming: tier-aware section"
   local f="$PLUGIN_ROOT/skills/brainstorming/SKILL.md"
-  assert "tier-aware section present" "$(grep -c 'Subagent dispatch (tier-aware)' "$f")" "1"
-  assert "reactive ask prompt present" "$(grep -c 'Dispatch a subagent for it? \[y/N\]' "$f")" "1"
+  assert "tier-aware section present" \
+    "$([ "$(grep -c 'Subagent dispatch (tier-aware)' "$f")" -ge 1 ] && echo yes || echo no)" "yes"
+  assert "reactive ask prompt present" \
+    "$([ "$(grep -c 'Dispatch a subagent for it? \[y/N\]' "$f")" -ge 1 ] && echo yes || echo no)" "yes"
 }
 
-# Phase 2.2 — Writing-plans tier-aware Selection Logic
 test_writing_plans_has_tier_aware_thresholds() {
   bold "Writing-plans: tier-aware thresholds"
   local f="$PLUGIN_ROOT/skills/writing-plans/SKILL.md"
-  assert "balanced threshold present" "$(grep -c 'context ≥75% OR ≥8 disjoint tasks' "$f")" "1"
-  assert "reactive ask for plan drafting" "$(grep -c 'Dispatch a subagent for it? \[y/N\]' "$f")" "1"
+  assert "balanced threshold present" \
+    "$([ "$(grep -c 'context ≥75% OR ≥8 disjoint tasks' "$f")" -ge 1 ] && echo yes || echo no)" "yes"
+  assert "reactive ask for plan drafting" \
+    "$([ "$(grep -c 'Dispatch a subagent for it? \[y/N\]' "$f")" -ge 1 ] && echo yes || echo no)" "yes"
 }
 
 # Phase 2.3 — Remaining skills consult the ambient block

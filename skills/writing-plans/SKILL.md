@@ -126,10 +126,19 @@ Fix issues inline; no re-review.
 After saving and self-review, auto-select the execution approach, output the ready
 message, and **stop**. Do not invoke any execution skill until the user replies.
 
-### Selection Logic (evaluate in order)
-1. Current context window ≥ 60% full → **Subagent-Driven** (offload context pressure)
-2. Tasks are independent and touch disjoint files, and there are ≥ 5 → **Subagent-Driven** (fresh context, parallel waves)
-3. Default → **Inline** (no per-task subagent overhead for small/coupled plans)
+### Selection Logic (tier-aware)
+
+Read the active tier from the ambient `<subagent-mode>` block in session context (set by `~/.config/superpowers/config.conf`; full matrix in `skills/using-superpowers/subagent-policy.md`). Then evaluate in order:
+
+**Tier = `inline-first`:**
+1. User explicitly requested Subagent-Driven → **Subagent-Driven**
+2. Default → **Inline**
+
+**Tier = `balanced` (default):** Subagent-Driven when **context ≥75% OR ≥8 disjoint tasks**; else Inline. (Disjoint = tasks touch separate files and have no sequential dependency.)
+
+**Tier = `aggressive`:** Subagent-Driven when **context ≥60% OR ≥5 disjoint tasks**; else Inline.
+
+**Plan drafting itself (this skill, right now):** under `inline-first` or `balanced`, if you consider dispatching a subagent to *draft the plan*, ask first: `"This would normally run inline. Dispatch a subagent for it? [y/N]"`. Default no. Under `aggressive`, dispatch freely. Pre-design research (e.g., `Explore` to map related files) is not "drafting" and follows the normal tier rules.
 
 ### Ready Message
 ```

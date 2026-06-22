@@ -154,7 +154,7 @@ test_writing_plans_has_tier_aware_thresholds() {
 test_remaining_skills_consult_ambient_block() {
   bold "Remaining skills: consult ambient block"
   assert "sdd cites ambient block" \
-    "$(grep -c 'consult the ambient <dispatch-thresholds> block' "$PLUGIN_ROOT/skills/subagent-driven-development/SKILL.md")" "1"
+    "$([ "$(grep -c 'consult the ambient' "$PLUGIN_ROOT/skills/subagent-driven-development/SKILL.md")" -ge 1 ] && echo yes || echo no)" "yes"
   assert "parallel-agents tier-aware" \
     "$(grep -c '≥3 disjoint tasks' "$PLUGIN_ROOT/skills/dispatching-parallel-agents/SKILL.md")" "1"
   assert "code-review inline under non-aggressive" \

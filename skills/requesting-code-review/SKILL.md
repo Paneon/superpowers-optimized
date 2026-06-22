@@ -27,7 +27,9 @@ Request review early to catch issues before they spread.
      - **Hashes match (fresh):** use `changed_files` and `blast_radius` as the review scope. Inject this summary into the code-reviewer prompt: *"Changed files: [list]. Also referenced by: [blast_radius callers]."*
      - **Hashes differ (stale):** note the snapshot is from a previous commit; use `changed_files` as a starting point but do not rely on `blast_radius`.
    - If absent: determine scope from `git diff --name-only BASE_SHA..HEAD_SHA` directly.
-3. Dispatch `superpowers-optimized:code-reviewer` using `requesting-code-review/code-reviewer.md`.
+3. **Tier-aware dispatch** (consult the ambient `<dispatch-thresholds>` block):
+   - Under `aggressive`: dispatch the `superpowers-optimized:code-reviewer` subagent using `requesting-code-review/code-reviewer.md`.
+   - Under `inline-first` or `balanced` (default): run the code review inline in the main loop using the same review prompt content; do not dispatch a subagent.
 4. Provide:
    - What changed (from context snapshot or git diff)
    - Scoped file list (changed files + blast radius callers if fresh snapshot available, or broad if not)

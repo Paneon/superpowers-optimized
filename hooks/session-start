@@ -106,6 +106,7 @@ subagent-driven-development dispatch: not without explicit user opt-in.
 requesting-code-review reviewer subagent: run inline review.
 dispatching-parallel-agents: discouraged; propose inline first.
 brainstorming / writing-plans drafting: ASK the user before dispatching a subagent ("This would normally run inline. Dispatch a subagent for it? [y/N]") — proceed only on explicit yes.
+brainstorming / writing-plans invocation: always run in the main loop (interactive dialog required); never dispatch as a subagent.
 FALLBACK_INLINE_FIRST
             ;;
         aggressive)
@@ -115,6 +116,7 @@ subagent-driven-development dispatch: dispatch freely for any independent work.
 requesting-code-review reviewer subagent: dispatch the code-reviewer subagent.
 dispatching-parallel-agents: dispatch freely when standard independence checks hold.
 brainstorming / writing-plans drafting: dispatch freely when useful (no ask required).
+brainstorming / writing-plans invocation: a parent flow may dispatch them as headless subagents (subagent skips user-dialog steps and returns a best-guess spec or plan for the parent to present).
 FALLBACK_AGGRESSIVE
             ;;
         *)
@@ -124,6 +126,7 @@ subagent-driven-development dispatch: true parallel waves only (≥3 disjoint ta
 requesting-code-review reviewer subagent: run inline review.
 dispatching-parallel-agents: allowed when independence proven.
 brainstorming / writing-plans drafting: ASK the user before dispatching a subagent ("This would normally run inline. Dispatch a subagent for it? [y/N]") — proceed only on explicit yes.
+brainstorming / writing-plans invocation: always run in the main loop (interactive dialog required); never dispatch as a subagent.
 FALLBACK_BALANCED
             ;;
     esac

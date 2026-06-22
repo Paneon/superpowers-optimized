@@ -23,10 +23,17 @@ Default when unset, invalid, or unreadable: **balanced**.
 | `requesting-code-review` reviewer subagent                       | inline review                    | inline review                       | dispatch subagent                     |
 | `dispatching-parallel-agents`                                    | discouraged; propose inline      | allowed when independence proven    | freely                                |
 | `brainstorming` / `writing-plans` drafting <sup>†</sup>          | ask user first; default no       | ask user first; default no          | dispatch freely                       |
+| `brainstorming` / `writing-plans` invocation by parent <sup>‡</sup> | always main loop (dialog required) | always main loop (dialog required) | parent may dispatch as headless subagent |
 
 <sup>†</sup> "Drafting" means writing the spec or plan output itself. Pre-design *research*
 (e.g., dispatching `Explore` to map the codebase) is not drafting and follows the normal
 dispatch rules for the active tier.
+
+<sup>‡</sup> Headless invocation means the dispatched subagent skips interactive steps
+(clarifying questions, design approval, spec review) and returns a best-guess spec or
+plan for the parent to present to the user. Useful under `aggressive` for scope
+decomposition (e.g., parallel brainstorms across N sub-systems). Under non-aggressive
+tiers, the interactive dialog is the point of these skills — dispatching breaks them.
 
 ## Hard Rule Notes
 
@@ -52,6 +59,7 @@ subagent-driven-development dispatch: not without explicit user opt-in.
 requesting-code-review reviewer subagent: run inline review.
 dispatching-parallel-agents: discouraged; propose inline first.
 brainstorming / writing-plans drafting: ASK the user before dispatching a subagent ("This would normally run inline. Dispatch a subagent for it? [y/N]") — proceed only on explicit yes.
+brainstorming / writing-plans invocation: always run in the main loop (interactive dialog required); never dispatch as a subagent.
 <!-- TIER-RULES:inline-first END -->
 
 <!-- TIER-RULES:balanced START -->
@@ -60,6 +68,7 @@ subagent-driven-development dispatch: true parallel waves only (≥3 disjoint ta
 requesting-code-review reviewer subagent: run inline review.
 dispatching-parallel-agents: allowed when independence proven.
 brainstorming / writing-plans drafting: ASK the user before dispatching a subagent ("This would normally run inline. Dispatch a subagent for it? [y/N]") — proceed only on explicit yes.
+brainstorming / writing-plans invocation: always run in the main loop (interactive dialog required); never dispatch as a subagent.
 <!-- TIER-RULES:balanced END -->
 
 <!-- TIER-RULES:aggressive START -->
@@ -68,4 +77,5 @@ subagent-driven-development dispatch: dispatch freely for any independent work.
 requesting-code-review reviewer subagent: dispatch the code-reviewer subagent.
 dispatching-parallel-agents: dispatch freely when standard independence checks hold.
 brainstorming / writing-plans drafting: dispatch freely when useful (no ask required).
+brainstorming / writing-plans invocation: a parent flow may dispatch them as headless subagents (subagent skips user-dialog steps and returns a best-guess spec or plan for the parent to present).
 <!-- TIER-RULES:aggressive END -->

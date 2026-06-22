@@ -41,7 +41,7 @@ of any curated `docs/` tree. (User preferences for plan location override this.)
 ```markdown
 # <Feature Name> Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers-optimized:subagent-driven-development (recommended) or superpowers-optimized:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL — pick `superpowers-optimized:executing-plans` (inline) or `superpowers-optimized:subagent-driven-development` based on the active `subagent_mode` tier (see ambient `<dispatch-thresholds>` and `skills/using-superpowers/subagent-policy.md`). Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** <single sentence>
 **Architecture:** <2-4 sentences>

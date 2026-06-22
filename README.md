@@ -557,6 +557,25 @@ To disable startup auto-update checks for Codex/OpenCode/Pi/Gemini CLI:
    auto_update=false
    ```
 
+## Configuration
+
+User-global settings live in `~/.config/superpowers/config.conf` (INI-style key/value).
+
+### `subagent_mode` — tier-aware subagent dispatch
+
+Controls how aggressively the skillset dispatches subagents. Subagents fight context rot but duplicate context per dispatch — a single task on a lower-tier plan can burn a sizable chunk of weekly tokens if every step spawns one.
+
+```ini
+subagent_mode=balanced   # inline-first | balanced | aggressive
+```
+
+- **`inline-first`** — minimize subagent use. Plan execution stays inline unless the user explicitly opts in. Code review runs in the main loop. Brainstorming and writing-plans ask before any drafting dispatch. Best for token-constrained plans.
+- **`balanced`** *(default)* — subagents only when they clearly pay off: context ≥75% full, ≥8 disjoint plan tasks, or ≥3 truly parallel tasks. Code review runs inline. Brainstorming/writing-plans still ask before drafting dispatch.
+- **`aggressive`** — subagent-heavy. Plan execution dispatches at the original 60%/≥5 thresholds, code review dispatches its own subagent, brainstorming/writing-plans may dispatch for drafting without asking. Best for Max-plan users who treat subagents as the default tool against context rot.
+
+Default when unset, invalid, or unreadable: `balanced`. Tier is locked at session start — edit and restart Claude to apply.
+
+Full threshold matrix and per-skill rules: `skills/using-superpowers/subagent-policy.md`.
 
 # Verify Installation
 

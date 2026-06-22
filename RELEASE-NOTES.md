@@ -1,5 +1,19 @@
 # Superpowers Optimized Release Notes
 
+## v6.7.0 (2026-06-22)
+
+Tier-aware subagent dispatch via the new `subagent_mode` config.
+
+### New Features
+
+**`subagent_mode` config (`~/.config/superpowers/config.conf`)** — Subagent dispatch is now **balanced by default**. Previously, plans with ≥5 disjoint tasks or sessions at ≥60% context would auto-dispatch subagent execution, and code review always spawned a `code-reviewer` subagent. The new `balanced` default raises plan thresholds to ≥8 disjoint tasks / ≥75% context and runs code review inline; under `inline-first` subagent dispatch is reserved for explicit user opt-in. Tier values: `inline-first` | `balanced` | `aggressive`. To restore the previous behavior, set `subagent_mode=aggressive`. The motivation: on lower-tier plans (20€/100€), the previous defaults could burn ~25% of weekly token budget on a single task because each subagent re-receives setup and project context.
+
+**Reactive ask before drafting dispatch** — Under `inline-first` and `balanced`, `brainstorming` and `writing-plans` ask the user before dispatching a subagent for spec or plan drafting work (`"This would normally run inline. Dispatch a subagent for it? [y/N]"`, default no). Fixes a regression where `/writing-plans` could silently spawn a subagent to draft a design spec even though both skills documented an inline self-review.
+
+**Ambient `<dispatch-thresholds>` block** — SessionStart now injects the active tier's dispatch rules into session context (read from `skills/using-superpowers/subagent-policy.md`, with a hardcoded fallback). All dispatch-decision skills (`writing-plans`, `subagent-driven-development`, `dispatching-parallel-agents`, `requesting-code-review`, `brainstorming`, `using-superpowers`) consult this block at the point of decision.
+
+Full threshold matrix: `skills/using-superpowers/subagent-policy.md`. Behavior verification: `bash tests/subagent-mode/run-tests.sh` and the manual checklist at `tests/subagent-mode/MANUAL-CHECKS.md`.
+
 ## v6.6.2 (2026-06-22)
 
 Stop-hook decision-log reminder no longer makes false claims on spec/plan-only sessions.

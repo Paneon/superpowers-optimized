@@ -17,11 +17,9 @@ function register(api) {
         };
         try {
             const { stdout } = await (0, utils_1.runJsHook)(USER_PROMPT_HOOK, payload, { timeoutMs: 4000 });
-            const parsed = (0, utils_1.parseHookOutput)(stdout);
-            const hookSpecific = parsed?.hookSpecificOutput;
-            const additionalContext = hookSpecific?.additionalContext;
-            if (additionalContext && api.injectContext) {
-                api.injectContext(additionalContext);
+            const env = (0, utils_1.readEnvelope)(stdout);
+            if (env?.additionalContext && api.injectContext) {
+                api.injectContext(env.additionalContext);
             }
         }
         catch {

@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.extractReminder = extractReminder;
 exports.register = register;
 const utils_1 = require("./utils");
 // Pi has no SubagentStop equivalent (no sub-agent concept) — the
@@ -8,26 +7,6 @@ const utils_1 = require("./utils");
 // Path override supports the adapter test fixture. Real Pi installs never
 // set this — they get the production stop-reminders.js.
 const STOP_REMINDERS = process.env.PI_STOP_REMINDERS_SCRIPT || 'hooks/stop-reminders.js';
-// Exported for unit testing of the envelope-extraction logic.
-// hooks/stop-reminders.js returns { decision: 'block', reason } (legacy
-// envelope used for broader version compat). Other hooks return
-// { hookSpecificOutput: { additionalContext } }. A plain-text reminder is
-// also surfaced when the script writes non-JSON to stdout.
-function extractReminder(stdout) {
-    const parsed = (0, utils_1.parseHookOutput)(stdout);
-    if (parsed) {
-        const hookSpecific = parsed.hookSpecificOutput;
-        if (typeof hookSpecific?.additionalContext === 'string' && hookSpecific.additionalContext) {
-            return hookSpecific.additionalContext;
-        }
-        if (typeof parsed.reason === 'string' && parsed.reason) {
-            return parsed.reason;
-        }
-        return null;
-    }
-    const trimmed = stdout.trim();
-    return trimmed ? trimmed : null;
-}
 function register(api) {
     api.on('agent_end', async (evt) => {
         const payload = {
@@ -37,7 +16,11 @@ function register(api) {
         };
         try {
             const { stdout } = await (0, utils_1.runJsHook)(STOP_REMINDERS, payload, { timeoutMs: 3000 });
-            const reminder = extractReminder(stdout);
+            // stop-reminders historically returns the legacy {decision, reason}
+            // envelope (see comment on the JS hook). envelopeText() consults
+            // hookSpecificOutput.additionalContext, then reason, then falls back
+            // to raw stdout when no JSON was emitted.
+            const reminder = (0, utils_1.envelopeText)((0, utils_1.readEnvelope)(stdout), stdout);
             if (reminder && api.injectReminder) {
                 api.injectReminder(reminder);
             }

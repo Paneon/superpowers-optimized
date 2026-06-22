@@ -15,27 +15,22 @@ const PROTECT_SECRETS = process.env.PI_PROTECT_SECRETS_SCRIPT || 'hooks/safety/p
 const BLOCK_DANGEROUS = process.env.PI_BLOCK_DANGEROUS_SCRIPT || 'hooks/safety/block-dangerous-commands.js';
 const BASH_COMPRESS = process.env.PI_BASH_COMPRESS_SCRIPT || 'hooks/bash-compress-hook.js';
 const SECRET_GUARDED_TOOLS = new Set(['Read', 'Edit', 'Write', 'Bash']);
-function readDecision(stdout) {
-    const parsed = (0, utils_1.parseHookOutput)(stdout);
-    if (!parsed)
-        return null;
-    const hso = parsed.hookSpecificOutput;
-    return hso && typeof hso === 'object' ? hso : null;
-}
 async function callHook(script, payload) {
     try {
         const result = await (0, utils_1.runJsHook)(script, payload, { timeoutMs: 3000 });
         // Security-relevant: if the hook was killed by timeout or crashed, we
-        // cannot trust its (possibly partial) stdout. The safe move is to
-        // fail-closed at the caller — but that's the caller's policy, not
-        // ours. We surface "no decision" (null) so the caller picks.
-        if (result.timedOut || result.exitCode !== 0)
+        // cannot trust its (possibly partial) stdout. We surface "no decision"
+        // (null) so the caller can decide whether to fail-open or fail-closed.
+        if (result.timedOut || result.exitCode !== utils_1.HOOK_EXIT.OK)
             return null;
-        return readDecision(result.stdout);
+        return (0, utils_1.readEnvelope)(result.stdout);
     }
     catch {
         return null;
     }
+}
+function denial(env, fallbackReason) {
+    return { allow: false, reason: env.permissionDecisionReason ?? fallbackReason };
 }
 function register(api) {
     api.on('tool_call', async (evt) => {
@@ -47,27 +42,24 @@ function register(api) {
         };
         // 1) Secrets first — covers Read/Edit/Write/Bash.
         if (SECRET_GUARDED_TOOLS.has(evt.toolName)) {
-            const secretDecision = await callHook(PROTECT_SECRETS, payload);
-            if (secretDecision?.permissionDecision === 'deny') {
-                return { allow: false, reason: secretDecision.permissionDecisionReason ?? 'blocked by protect-secrets' };
-            }
+            const env = await callHook(PROTECT_SECRETS, payload);
+            if (env?.permissionDecision === 'deny')
+                return denial(env, 'blocked by protect-secrets');
         }
         // 2) Dangerous-bash blocker.
         if (evt.toolName === 'Bash') {
-            const dangerDecision = await callHook(BLOCK_DANGEROUS, payload);
-            if (dangerDecision?.permissionDecision === 'deny') {
-                return { allow: false, reason: dangerDecision.permissionDecisionReason ?? 'blocked by block-dangerous-commands' };
-            }
+            const dangerEnv = await callHook(BLOCK_DANGEROUS, payload);
+            if (dangerEnv?.permissionDecision === 'deny')
+                return denial(dangerEnv, 'blocked by block-dangerous-commands');
             // 3) Bash compression rewrites the command. Today the hook only emits
             //    permissionDecision='allow' + updatedInput, but a future change
             //    (or a substitute compress hook) could emit 'deny' too. Check
             //    decision FIRST so a deny is never downgraded to allow.
-            const compressDecision = await callHook(BASH_COMPRESS, payload);
-            if (compressDecision?.permissionDecision === 'deny') {
-                return { allow: false, reason: compressDecision.permissionDecisionReason ?? 'blocked by bash-compress-hook' };
-            }
-            if (compressDecision?.updatedInput) {
-                return { allow: true, transformedParams: compressDecision.updatedInput };
+            const compressEnv = await callHook(BASH_COMPRESS, payload);
+            if (compressEnv?.permissionDecision === 'deny')
+                return denial(compressEnv, 'blocked by bash-compress-hook');
+            if (compressEnv?.updatedInput) {
+                return { allow: true, transformedParams: compressEnv.updatedInput };
             }
         }
         return; // Pass through unchanged.

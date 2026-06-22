@@ -34,12 +34,11 @@ function register(api) {
             }
             if (evt.toolName === 'Bash') {
                 const { stdout } = await (0, utils_1.runJsHook)(POSTTOOL_BASH_COMPRESS, payload, { timeoutMs: 2000 });
-                const parsed = (0, utils_1.parseHookOutput)(stdout);
-                // posttool-bash-compress emits { decision, reason, hookSpecificOutput.additionalContext }
-                // when it has a compressed replacement. Surface either form via injectContext.
-                const hookSpecific = parsed?.hookSpecificOutput;
-                const compressed = (typeof hookSpecific?.additionalContext === 'string' && hookSpecific.additionalContext) ||
-                    (typeof parsed?.reason === 'string' ? parsed.reason : null);
+                // posttool-bash-compress emits both shapes: { decision, reason } AND
+                // { hookSpecificOutput: { additionalContext } }. envelopeText picks
+                // the first available source. We pass '' as rawStdout so a non-JSON
+                // hook output is NOT surfaced — only structured envelopes count here.
+                const compressed = (0, utils_1.envelopeText)((0, utils_1.readEnvelope)(stdout));
                 if (compressed && api.injectContext) {
                     api.injectContext(compressed);
                 }

@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ToolCallEvent, ToolCallDecision } from './types';
-import { runJsHook, parseHookOutput } from './utils';
+import { runJsHook, readEnvelope, HOOK_EXIT } from './utils';
+import type { HookEnvelope } from './utils';
 
 // Dispatch order is intentional: secrets check first (blocks reads/writes of
 // .env etc.), then dangerous-bash (blocks rm -rf /), then bash-compress
@@ -17,36 +18,26 @@ const BASH_COMPRESS   = process.env.PI_BASH_COMPRESS_SCRIPT      || 'hooks/bash-
 
 const SECRET_GUARDED_TOOLS = new Set(['Read', 'Edit', 'Write', 'Bash']);
 
-interface HookSpecificOutput {
-  permissionDecision?: 'allow' | 'deny';
-  permissionDecisionReason?: string;
-  updatedInput?: Record<string, unknown>;
-}
-
-function readDecision(stdout: string): HookSpecificOutput | null {
-  const parsed = parseHookOutput(stdout);
-  if (!parsed) return null;
-  const hso = parsed.hookSpecificOutput;
-  return hso && typeof hso === 'object' ? (hso as HookSpecificOutput) : null;
-}
-
-async function callHook(script: string, payload: object): Promise<HookSpecificOutput | null> {
+async function callHook(script: string, payload: Record<string, unknown>): Promise<HookEnvelope | null> {
   try {
     const result = await runJsHook(script, payload, { timeoutMs: 3000 });
     // Security-relevant: if the hook was killed by timeout or crashed, we
-    // cannot trust its (possibly partial) stdout. The safe move is to
-    // fail-closed at the caller — but that's the caller's policy, not
-    // ours. We surface "no decision" (null) so the caller picks.
-    if (result.timedOut || result.exitCode !== 0) return null;
-    return readDecision(result.stdout);
+    // cannot trust its (possibly partial) stdout. We surface "no decision"
+    // (null) so the caller can decide whether to fail-open or fail-closed.
+    if (result.timedOut || result.exitCode !== HOOK_EXIT.OK) return null;
+    return readEnvelope(result.stdout);
   } catch {
     return null;
   }
 }
 
+function denial(env: HookEnvelope, fallbackReason: string): ToolCallDecision {
+  return { allow: false, reason: env.permissionDecisionReason ?? fallbackReason };
+}
+
 export function register(api: ExtensionAPI): void {
   api.on('tool_call', async (evt: ToolCallEvent): Promise<ToolCallDecision | void> => {
-    const payload = {
+    const payload: Record<string, unknown> = {
       tool_name: evt.toolName,
       tool_input: evt.params,
       session_id: evt.sessionId,
@@ -55,29 +46,23 @@ export function register(api: ExtensionAPI): void {
 
     // 1) Secrets first — covers Read/Edit/Write/Bash.
     if (SECRET_GUARDED_TOOLS.has(evt.toolName)) {
-      const secretDecision = await callHook(PROTECT_SECRETS, payload);
-      if (secretDecision?.permissionDecision === 'deny') {
-        return { allow: false, reason: secretDecision.permissionDecisionReason ?? 'blocked by protect-secrets' };
-      }
+      const env = await callHook(PROTECT_SECRETS, payload);
+      if (env?.permissionDecision === 'deny') return denial(env, 'blocked by protect-secrets');
     }
 
     // 2) Dangerous-bash blocker.
     if (evt.toolName === 'Bash') {
-      const dangerDecision = await callHook(BLOCK_DANGEROUS, payload);
-      if (dangerDecision?.permissionDecision === 'deny') {
-        return { allow: false, reason: dangerDecision.permissionDecisionReason ?? 'blocked by block-dangerous-commands' };
-      }
+      const dangerEnv = await callHook(BLOCK_DANGEROUS, payload);
+      if (dangerEnv?.permissionDecision === 'deny') return denial(dangerEnv, 'blocked by block-dangerous-commands');
 
       // 3) Bash compression rewrites the command. Today the hook only emits
       //    permissionDecision='allow' + updatedInput, but a future change
       //    (or a substitute compress hook) could emit 'deny' too. Check
       //    decision FIRST so a deny is never downgraded to allow.
-      const compressDecision = await callHook(BASH_COMPRESS, payload);
-      if (compressDecision?.permissionDecision === 'deny') {
-        return { allow: false, reason: compressDecision.permissionDecisionReason ?? 'blocked by bash-compress-hook' };
-      }
-      if (compressDecision?.updatedInput) {
-        return { allow: true, transformedParams: compressDecision.updatedInput };
+      const compressEnv = await callHook(BASH_COMPRESS, payload);
+      if (compressEnv?.permissionDecision === 'deny') return denial(compressEnv, 'blocked by bash-compress-hook');
+      if (compressEnv?.updatedInput) {
+        return { allow: true, transformedParams: compressEnv.updatedInput };
       }
     }
 

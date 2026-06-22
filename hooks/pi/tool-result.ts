@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ToolResultEvent } from './types';
-import { runJsHook, parseHookOutput } from './utils';
+import { runJsHook, readEnvelope, envelopeText } from './utils';
 
 // Claude's PostToolUse fires on Edit|Write (track-edits.js) and on Skill
 // (track-session-stats.js). Pi has no Skill tool — skill expansion is the
@@ -22,7 +22,7 @@ const EDIT_TOOLS = new Set(['Edit', 'Write']);
 
 export function register(api: ExtensionAPI): void {
   api.on('tool_result', async (evt: ToolResultEvent) => {
-    const payload = {
+    const payload: Record<string, unknown> = {
       tool_name: evt.toolName,
       tool_input: evt.params,
       tool_response: evt.result,
@@ -38,16 +38,11 @@ export function register(api: ExtensionAPI): void {
 
       if (evt.toolName === 'Bash') {
         const { stdout } = await runJsHook(POSTTOOL_BASH_COMPRESS, payload, { timeoutMs: 2000 });
-        const parsed = parseHookOutput(stdout);
-
-        // posttool-bash-compress emits { decision, reason, hookSpecificOutput.additionalContext }
-        // when it has a compressed replacement. Surface either form via injectContext.
-        const hookSpecific = parsed?.hookSpecificOutput as
-          | { additionalContext?: string }
-          | undefined;
-        const compressed =
-          (typeof hookSpecific?.additionalContext === 'string' && hookSpecific.additionalContext) ||
-          (typeof parsed?.reason === 'string' ? parsed.reason : null);
+        // posttool-bash-compress emits both shapes: { decision, reason } AND
+        // { hookSpecificOutput: { additionalContext } }. envelopeText picks
+        // the first available source. We pass '' as rawStdout so a non-JSON
+        // hook output is NOT surfaced — only structured envelopes count here.
+        const compressed = envelopeText(readEnvelope(stdout));
         if (compressed && api.injectContext) {
           api.injectContext(compressed);
         }

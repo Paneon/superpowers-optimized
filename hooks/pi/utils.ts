@@ -48,6 +48,13 @@ function resolveAndContain(scriptRelPath: string): string {
   // Today every caller passes a hardcoded literal, but this guard
   // closes the future RCE risk if any caller derives the path from
   // a Pi-supplied field.
+  //
+  // Note: this uses path.resolve, NOT fs.realpathSync. Real Pi installs
+  // load this code via a symlink (~/.pi/agent/extensions/superpowers-optimized
+  // → hooks/pi/dist), so a realpath-based check would either reject the
+  // install entirely or require pinning the install location at build
+  // time. The current check is sufficient to block `..` traversal and
+  // absolute-path injection.
   const relative = path.relative(REPO_ROOT, resolved);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error(`runJsHook: refusing path outside repo root: ${resolved}`);
@@ -55,17 +62,96 @@ function resolveAndContain(scriptRelPath: string): string {
   return resolved;
 }
 
+/**
+ * Named exit codes returned by runJsHook. Callers should prefer comparing
+ * against these constants over magic numbers — e.g.
+ * `if (r.exitCode !== HOOK_EXIT.OK) return null;` reads intent better than
+ * `r.exitCode !== 0` for security-relevant callers that also need to
+ * exclude TIMEOUT/SIGTERM/SPAWN_ERROR.
+ */
+export const HOOK_EXIT = {
+  OK: 0,
+  /** GNU `timeout` convention — child killed by our timeout. */
+  TIMEOUT: 124,
+  /** Standard 128+SIGTERM. */
+  SIGTERM: 143,
+  /** spawn() never produced a process (binary not found, etc.). */
+  SPAWN_ERROR: 127,
+  /** Script path failed containment check against REPO_ROOT. */
+  BAD_PATH: 126,
+  /** Process exited via some other signal — surface non-zero. */
+  OTHER_SIGNAL: -1,
+} as const;
+export type HookExit = (typeof HOOK_EXIT)[keyof typeof HOOK_EXIT];
+
 export interface HookResult {
   stdout: string;
   stderr: string;
   exitCode: number;
-  /** True when the child was killed by the timeout. exitCode is `null` in this case. */
+  /** True when the child was killed by the timeout. exitCode is HOOK_EXIT.TIMEOUT in this case. */
   timedOut: boolean;
+}
+
+/**
+ * Normalized view over both envelope shapes hooks emit:
+ *   - Claude-shape:  { hookSpecificOutput: { additionalContext, permissionDecision, ... } }
+ *   - Legacy-shape:  { decision, reason }
+ * Either or both may be populated. Adapters read only the fields they care
+ * about. Centralizing this prevents the drift that caused the agent_end
+ * reminder-drop bug (see git log).
+ */
+export interface HookEnvelope {
+  // From hookSpecificOutput
+  additionalContext?: string;
+  permissionDecision?: 'allow' | 'deny';
+  permissionDecisionReason?: string;
+  updatedInput?: Record<string, unknown>;
+  // From the legacy top-level envelope (stop-reminders, posttool-bash-compress)
+  reason?: string;
+}
+
+export function readEnvelope(stdout: string): HookEnvelope | null {
+  const parsed = parseHookOutput(stdout);
+  if (!parsed) return null;
+
+  const env: HookEnvelope = {};
+  const hso = parsed.hookSpecificOutput;
+  if (hso && typeof hso === 'object') {
+    const h = hso as Record<string, unknown>;
+    if (typeof h.additionalContext === 'string') env.additionalContext = h.additionalContext;
+    if (h.permissionDecision === 'allow' || h.permissionDecision === 'deny') {
+      env.permissionDecision = h.permissionDecision;
+    }
+    if (typeof h.permissionDecisionReason === 'string') {
+      env.permissionDecisionReason = h.permissionDecisionReason;
+    }
+    if (h.updatedInput && typeof h.updatedInput === 'object') {
+      env.updatedInput = h.updatedInput as Record<string, unknown>;
+    }
+  }
+  if (typeof parsed.reason === 'string') env.reason = parsed.reason;
+  return env;
+}
+
+/**
+ * Extract the best human-readable text from an envelope. Order:
+ * hookSpecificOutput.additionalContext → top-level reason → raw stdout
+ * (only when no JSON envelope was parseable). Used by agent_end and
+ * tool_result(Bash) where any of the three sources is valid content.
+ */
+export function envelopeText(env: HookEnvelope | null, rawStdout = ''): string | null {
+  if (env) {
+    if (env.additionalContext) return env.additionalContext;
+    if (env.reason) return env.reason;
+    return null;
+  }
+  const trimmed = rawStdout.trim();
+  return trimmed || null;
 }
 
 export function runJsHook(
   scriptRelPath: string,
-  payload: object,
+  payload: Record<string, unknown>,
   opts: { timeoutMs?: number; detach?: boolean } = {},
 ): Promise<HookResult> {
   let scriptPath: string;
@@ -74,7 +160,7 @@ export function runJsHook(
   } catch (e) {
     return Promise.resolve({
       stdout: '', stderr: e instanceof Error ? e.message : String(e),
-      exitCode: 126, timedOut: false,
+      exitCode: HOOK_EXIT.BAD_PATH, timedOut: false,
     });
   }
 
@@ -118,14 +204,14 @@ export function runJsHook(
       //     just surface a non-zero so security callers fail-closed.
       let exitCode: number;
       if (typeof code === 'number') exitCode = code;
-      else if (timedOut) exitCode = 124; // GNU `timeout` convention for "killed by timeout"
-      else if (signal) exitCode = 143;   // 128 + SIGTERM
-      else exitCode = -1;
+      else if (timedOut) exitCode = HOOK_EXIT.TIMEOUT;
+      else if (signal) exitCode = HOOK_EXIT.SIGTERM;
+      else exitCode = HOOK_EXIT.OTHER_SIGNAL;
       resolve({ stdout, stderr, exitCode, timedOut });
     });
     child.on('error', () => {
       clearTimeout(timer);
-      resolve({ stdout, stderr, exitCode: 127, timedOut });
+      resolve({ stdout, stderr, exitCode: HOOK_EXIT.SPAWN_ERROR, timedOut });
     });
     try {
       child.stdin.write(JSON.stringify(payload));

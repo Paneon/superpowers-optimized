@@ -35,6 +35,10 @@ function create() {
 
     // Test helper: drive an event through registered handlers and collect
     // their return values (used to assert tool_call decisions).
+    //
+    // NOTE: `fire()` is test-only and intentionally outside the production
+    // ExtensionAPI interface in hooks/pi/types.ts. The real Pi runtime
+    // dispatches events; our adapters never call `api.fire`.
     async fire(event, payload) {
       const hs = handlers[event] || [];
       const results = [];

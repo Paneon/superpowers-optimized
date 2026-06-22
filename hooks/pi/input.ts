@@ -13,7 +13,7 @@ export function register(api: ExtensionAPI): void {
   api.on('input', async (evt: InputEvent) => {
     if (!evt.skillExpansion?.skill) return;
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       tool_name: 'Skill',
       tool_input: { skill: evt.skillExpansion.skill },
       session_id: evt.sessionId,

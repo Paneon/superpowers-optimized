@@ -33,7 +33,9 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.REPO_ROOT = void 0;
+exports.HOOK_EXIT = exports.REPO_ROOT = void 0;
+exports.readEnvelope = readEnvelope;
+exports.envelopeText = envelopeText;
 exports.runJsHook = runJsHook;
 exports.parseHookOutput = parseHookOutput;
 const child_process_1 = require("child_process");
@@ -82,11 +84,79 @@ function resolveAndContain(scriptRelPath) {
     // Today every caller passes a hardcoded literal, but this guard
     // closes the future RCE risk if any caller derives the path from
     // a Pi-supplied field.
+    //
+    // Note: this uses path.resolve, NOT fs.realpathSync. Real Pi installs
+    // load this code via a symlink (~/.pi/agent/extensions/superpowers-optimized
+    // → hooks/pi/dist), so a realpath-based check would either reject the
+    // install entirely or require pinning the install location at build
+    // time. The current check is sufficient to block `..` traversal and
+    // absolute-path injection.
     const relative = path.relative(exports.REPO_ROOT, resolved);
     if (relative.startsWith('..') || path.isAbsolute(relative)) {
         throw new Error(`runJsHook: refusing path outside repo root: ${resolved}`);
     }
     return resolved;
+}
+/**
+ * Named exit codes returned by runJsHook. Callers should prefer comparing
+ * against these constants over magic numbers — e.g.
+ * `if (r.exitCode !== HOOK_EXIT.OK) return null;` reads intent better than
+ * `r.exitCode !== 0` for security-relevant callers that also need to
+ * exclude TIMEOUT/SIGTERM/SPAWN_ERROR.
+ */
+exports.HOOK_EXIT = {
+    OK: 0,
+    /** GNU `timeout` convention — child killed by our timeout. */
+    TIMEOUT: 124,
+    /** Standard 128+SIGTERM. */
+    SIGTERM: 143,
+    /** spawn() never produced a process (binary not found, etc.). */
+    SPAWN_ERROR: 127,
+    /** Script path failed containment check against REPO_ROOT. */
+    BAD_PATH: 126,
+    /** Process exited via some other signal — surface non-zero. */
+    OTHER_SIGNAL: -1,
+};
+function readEnvelope(stdout) {
+    const parsed = parseHookOutput(stdout);
+    if (!parsed)
+        return null;
+    const env = {};
+    const hso = parsed.hookSpecificOutput;
+    if (hso && typeof hso === 'object') {
+        const h = hso;
+        if (typeof h.additionalContext === 'string')
+            env.additionalContext = h.additionalContext;
+        if (h.permissionDecision === 'allow' || h.permissionDecision === 'deny') {
+            env.permissionDecision = h.permissionDecision;
+        }
+        if (typeof h.permissionDecisionReason === 'string') {
+            env.permissionDecisionReason = h.permissionDecisionReason;
+        }
+        if (h.updatedInput && typeof h.updatedInput === 'object') {
+            env.updatedInput = h.updatedInput;
+        }
+    }
+    if (typeof parsed.reason === 'string')
+        env.reason = parsed.reason;
+    return env;
+}
+/**
+ * Extract the best human-readable text from an envelope. Order:
+ * hookSpecificOutput.additionalContext → top-level reason → raw stdout
+ * (only when no JSON envelope was parseable). Used by agent_end and
+ * tool_result(Bash) where any of the three sources is valid content.
+ */
+function envelopeText(env, rawStdout = '') {
+    if (env) {
+        if (env.additionalContext)
+            return env.additionalContext;
+        if (env.reason)
+            return env.reason;
+        return null;
+    }
+    const trimmed = rawStdout.trim();
+    return trimmed || null;
 }
 function runJsHook(scriptRelPath, payload, opts = {}) {
     let scriptPath;
@@ -96,7 +166,7 @@ function runJsHook(scriptRelPath, payload, opts = {}) {
     catch (e) {
         return Promise.resolve({
             stdout: '', stderr: e instanceof Error ? e.message : String(e),
-            exitCode: 126, timedOut: false,
+            exitCode: exports.HOOK_EXIT.BAD_PATH, timedOut: false,
         });
     }
     return new Promise((resolve) => {
@@ -144,16 +214,16 @@ function runJsHook(scriptRelPath, payload, opts = {}) {
             if (typeof code === 'number')
                 exitCode = code;
             else if (timedOut)
-                exitCode = 124; // GNU `timeout` convention for "killed by timeout"
+                exitCode = exports.HOOK_EXIT.TIMEOUT;
             else if (signal)
-                exitCode = 143; // 128 + SIGTERM
+                exitCode = exports.HOOK_EXIT.SIGTERM;
             else
-                exitCode = -1;
+                exitCode = exports.HOOK_EXIT.OTHER_SIGNAL;
             resolve({ stdout, stderr, exitCode, timedOut });
         });
         child.on('error', () => {
             clearTimeout(timer);
-            resolve({ stdout, stderr, exitCode: 127, timedOut });
+            resolve({ stdout, stderr, exitCode: exports.HOOK_EXIT.SPAWN_ERROR, timedOut });
         });
         try {
             child.stdin.write(JSON.stringify(payload));

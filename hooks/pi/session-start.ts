@@ -9,7 +9,7 @@ const SESSION_START_HOOK = 'hooks/codex/session-start-adapter.js';
 
 export function register(api: ExtensionAPI): void {
   api.on('session_start', async (evt: SessionStartEvent) => {
-    const payload = {
+    const payload: Record<string, unknown> = {
       session_id: evt.sessionId,
       cwd: evt.cwd ?? process.cwd(),
       // Pi may or may not expose startup vs resume; default to startup.

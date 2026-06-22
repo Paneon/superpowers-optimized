@@ -19,7 +19,7 @@ stdin-JSON contract.
 | Dangerous Bash command blocking | ✅ | `tool_call` → `block-dangerous-commands.js` |
 | Secret-file protection (.env, SSH keys, AWS creds, etc.) | ✅ | `tool_call` → `protect-secrets.js` |
 | Bash command compression (PreToolUse rewrite) | ✅ | `tool_call` → `bash-compress-hook.js` |
-| Bash post-execution smart-compress | ✅ | `tool_result` → `codex/posttool-bash-compress-adapter.js` |
+| Bash post-execution smart-compress | ⚠️ context-only | `tool_result` → `codex/posttool-bash-compress-adapter.js`. Pi's `tool_result` has no return path to replace the tool's output stream, so the compressed summary is surfaced via `api.injectContext` alongside (not in place of) the original verbose output. |
 | Edit/Write tracking | ✅ | `tool_result` → `track-edits.js` |
 | Skill-usage session stats | ⚠️ conditional | `input` adapter listens for `skillExpansion` payload; if Pi does not surface skill expansion in `input`, this stays Claude-only |
 | Stop-time discipline reminders | ✅ | `agent_end` → `stop-reminders.js`, surfaced via `api.injectReminder` |
@@ -135,6 +135,15 @@ Claude distinguishes `startup`, `resume`, `clear`, and `compact` for
 `SessionStart`. Pi exposes a single `session_start` event. If the event
 payload includes a `source` field we pass it through; otherwise the
 adapter defaults to `startup`.
+
+### Bash post-execution compression is context-only
+
+Claude and Codex *replace* the verbose Bash output with a compressed summary
+on `PostToolUse(Bash)`. Pi's `tool_result` event has no documented return
+path to mutate the result the agent already received, so on Pi the
+compressed summary is injected as supplemental context instead. The
+agent sees both: the original output it just executed against, and the
+summary. This is still a useful signal but not a context-saving win.
 
 ### Auto-update on session start
 

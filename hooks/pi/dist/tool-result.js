@@ -6,8 +6,17 @@ const utils_1 = require("./utils");
 // (track-session-stats.js). Pi has no Skill tool — skill expansion is the
 // `input` event, handled by hooks/pi/input.ts. Here we cover Edit/Write
 // (track-edits) and Bash post-execution compression.
-const TRACK_EDITS = 'hooks/track-edits.js';
-const POSTTOOL_BASH_COMPRESS = 'hooks/codex/posttool-bash-compress-adapter.js';
+//
+// Note on Bash post-execution compression: Claude/Codex replace the tool's
+// output stream with the compressed text. Pi's tool_result event has no
+// return path to mutate the result Pi already gave the agent, so we
+// surface the compressed summary via api.injectContext — the agent sees
+// the summary as supplemental context alongside (not in place of) the
+// original output. docs/platforms/pi.md notes this is ⚠️ context-only on Pi.
+// Script paths can be overridden via env for hermetic testing. Real
+// Pi installs never set these.
+const TRACK_EDITS = process.env.PI_TRACK_EDITS_SCRIPT || 'hooks/track-edits.js';
+const POSTTOOL_BASH_COMPRESS = process.env.PI_POSTTOOL_BASH_COMPRESS_SCRIPT || 'hooks/codex/posttool-bash-compress-adapter.js';
 const EDIT_TOOLS = new Set(['Edit', 'Write']);
 function register(api) {
     api.on('tool_result', async (evt) => {
@@ -21,9 +30,19 @@ function register(api) {
         try {
             if (EDIT_TOOLS.has(evt.toolName)) {
                 await (0, utils_1.runJsHook)(TRACK_EDITS, payload, { timeoutMs: 2000 });
+                return;
             }
-            else if (evt.toolName === 'Bash') {
-                await (0, utils_1.runJsHook)(POSTTOOL_BASH_COMPRESS, payload, { timeoutMs: 2000 });
+            if (evt.toolName === 'Bash') {
+                const { stdout } = await (0, utils_1.runJsHook)(POSTTOOL_BASH_COMPRESS, payload, { timeoutMs: 2000 });
+                const parsed = (0, utils_1.parseHookOutput)(stdout);
+                // posttool-bash-compress emits { decision, reason, hookSpecificOutput.additionalContext }
+                // when it has a compressed replacement. Surface either form via injectContext.
+                const hookSpecific = parsed?.hookSpecificOutput;
+                const compressed = (typeof hookSpecific?.additionalContext === 'string' && hookSpecific.additionalContext) ||
+                    (typeof parsed?.reason === 'string' ? parsed.reason : null);
+                if (compressed && api.injectContext) {
+                    api.injectContext(compressed);
+                }
             }
         }
         catch {

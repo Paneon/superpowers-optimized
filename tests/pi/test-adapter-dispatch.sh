@@ -149,25 +149,69 @@ const factory = require('$DIST').default;
   }
 
   // -----------------------------------------------------------------
-  // tool_result: Edit → track-edits invoked (no error)
-  // tool_result: Bash → posttool-bash-compress invoked (no error)
-  // (We assert no throw; track-edits has side effects on ~/.claude/ logs
-  //  that we don't depend on.)
+  // tool_result(Edit) → track-edits actually receives the payload
+  // (proven via a fixture that writes the stdin to a marker file)
   // -----------------------------------------------------------------
   {
+    const fs = require('fs'), os = require('os'), path = require('path');
+    const marker = path.join(os.tmpdir(), 'pi-track-edits-' + SESSION_ID + '.json');
+    process.env.PI_TRACK_EDITS_SCRIPT = path.join('$REPO', 'tests/pi/fixtures/track-edits-fake.js');
+    process.env.PI_TRACK_EDITS_MARKER = marker;
+    delete require.cache[require.resolve('$REPO/hooks/pi/dist/tool-result.js')];
+    delete require.cache[require.resolve('$REPO/hooks/pi/dist/index.js')];
+    const factoryFresh = require('$REPO/hooks/pi/dist/index.js').default;
+
     const api = create();
-    factory(api);
+    factoryFresh(api);
     await api.fire('tool_result', {
       toolName: 'Edit',
-      params: { file_path: '/tmp/x.txt' },
+      params: { file_path: '/tmp/x.txt', new_string: 'hi' },
       result: { ok: true },
+      sessionId: SESSION_ID,
     });
+
+    if (!fs.existsSync(marker)) fail('tool_result(Edit): track-edits never received the payload');
+    const captured = JSON.parse(fs.readFileSync(marker, 'utf8'));
+    if (captured.tool_name !== 'Edit') fail('tool_result(Edit): payload.tool_name was ' + captured.tool_name);
+    if (!captured.tool_input || captured.tool_input.file_path !== '/tmp/x.txt') {
+      fail('tool_result(Edit): payload.tool_input not forwarded correctly');
+    }
+    pass('tool_result(Edit) forwards full payload to track-edits');
+
+    fs.unlinkSync(marker);
+    delete process.env.PI_TRACK_EDITS_SCRIPT;
+    delete process.env.PI_TRACK_EDITS_MARKER;
+  }
+
+  // -----------------------------------------------------------------
+  // tool_result(Bash) → posttool-bash-compress output surfaces via
+  // api.injectContext (the only way Pi can see the compressed summary).
+  // -----------------------------------------------------------------
+  {
+    const path = require('path');
+    process.env.PI_POSTTOOL_BASH_COMPRESS_SCRIPT = path.join('$REPO', 'tests/pi/fixtures/posttool-bash-compress-fake.js');
+    delete require.cache[require.resolve('$REPO/hooks/pi/dist/tool-result.js')];
+    delete require.cache[require.resolve('$REPO/hooks/pi/dist/index.js')];
+    const factoryFresh = require('$REPO/hooks/pi/dist/index.js').default;
+
+    const api = create();
+    factoryFresh(api);
     await api.fire('tool_result', {
       toolName: 'Bash',
       params: { command: 'ls' },
       result: { stdout: 'a\nb\n' },
+      sessionId: SESSION_ID,
     });
-    pass('tool_result Edit/Bash dispatch without error');
+
+    if (api.contextInjections.length !== 1) {
+      fail('tool_result(Bash): expected 1 context injection from compress, got ' + api.contextInjections.length);
+    }
+    if (!/compressed/.test(api.contextInjections[0])) {
+      fail('tool_result(Bash): injected context missing compression marker');
+    }
+    pass('tool_result(Bash) surfaces posttool-bash-compress output via injectContext');
+
+    delete process.env.PI_POSTTOOL_BASH_COMPRESS_SCRIPT;
   }
 
   // -----------------------------------------------------------------
@@ -183,15 +227,89 @@ const factory = require('$DIST').default;
   }
 
   // -----------------------------------------------------------------
-  // agent_end → stop-reminders runs and may inject reminder
-  // (the reminder injection is optional — depends on stop-reminders logic
-  //  for this session — but the handler must not throw.)
+  // agent_end → stop-reminders' legacy {decision, reason} envelope must
+  // surface via api.injectReminder. Use a fixture script that ALWAYS
+  // emits the envelope to make this assertion deterministic (the real
+  // hook fires conditionally based on session state).
+  // -----------------------------------------------------------------
+  {
+    process.env.PI_STOP_REMINDERS_SCRIPT = require('path').join(
+      '$REPO', 'tests/pi/fixtures/stop-reminders-fake.js'
+    );
+    // Re-load the agent-end module under the env override.
+    delete require.cache[require.resolve('$REPO/hooks/pi/dist/agent-end.js')];
+    delete require.cache[require.resolve('$REPO/hooks/pi/dist/index.js')];
+    const factoryFresh = require('$REPO/hooks/pi/dist/index.js').default;
+
+    const api = create();
+    factoryFresh(api);
+    await api.fire('agent_end', { sessionId: SESSION_ID, cwd: '$REPO' });
+
+    if (api.reminderInjections.length !== 1) {
+      fail('agent_end: expected 1 reminder injection from legacy envelope, got ' + api.reminderInjections.length);
+    }
+    if (!/FAKE REMINDER/.test(api.reminderInjections[0])) {
+      fail('agent_end: reminder text did not contain the fixture marker');
+    }
+    pass('agent_end surfaces stop-reminders legacy {decision, reason} envelope');
+
+    delete process.env.PI_STOP_REMINDERS_SCRIPT;
+  }
+
+  // Smoke: real stop-reminders.js dispatches without throwing (does not assert
+  // a reminder was emitted, since that depends on dynamic session state).
+  {
+    const api = create();
+    factory(api);
+    await api.fire('agent_end', { sessionId: SESSION_ID + '-real', cwd: '$REPO' });
+    pass('agent_end dispatches real stop-reminders without error');
+  }
+
+  // -----------------------------------------------------------------
+  // Idempotency: factory(api) called twice must not double-register.
   // -----------------------------------------------------------------
   {
     const api = create();
     factory(api);
-    await api.fire('agent_end', { sessionId: 't', cwd: '$REPO' });
-    pass('agent_end dispatches stop-reminders without error');
+    factory(api);
+    for (const e of ['session_start','before_agent_start','input','tool_call','tool_result','agent_end']) {
+      if (api.handlers[e].length !== 1) {
+        fail('factory idempotency: ' + e + ' has ' + api.handlers[e].length + ' handlers (expected 1)');
+      }
+    }
+    pass('factory is idempotent (re-invocation does not double-register subscribers)');
+  }
+
+  // -----------------------------------------------------------------
+  // Dispatch contract: a deny-with-updatedInput from bash-compress must
+  // propagate as deny, not get downgraded to allow+transformedParams.
+  // (Today the real hook never emits deny, but the dispatch contract
+  // must hold for future / substitute hooks.)
+  // -----------------------------------------------------------------
+  {
+    const path = require('path');
+    process.env.PI_BASH_COMPRESS_SCRIPT = path.join('$REPO', 'tests/pi/fixtures/bash-compress-deny.js');
+    delete require.cache[require.resolve('$REPO/hooks/pi/dist/tool-call.js')];
+    delete require.cache[require.resolve('$REPO/hooks/pi/dist/index.js')];
+    const factoryFresh = require('$REPO/hooks/pi/dist/index.js').default;
+
+    const api = create();
+    factoryFresh(api);
+    const [decision] = await api.fire('tool_call', {
+      sessionId: SESSION_ID + '-denyprop',
+      toolName: 'Bash',
+      params: { command: 'echo hello' },
+    });
+
+    if (!decision || decision.allow !== false) {
+      fail('compress-deny: must propagate as allow:false, got ' + JSON.stringify(decision));
+    }
+    if (!/fixture/.test(decision.reason || '')) {
+      fail('compress-deny: reason did not include fixture marker, got: ' + decision.reason);
+    }
+    pass('tool_call: bash-compress deny propagates (not downgraded to allow)');
+
+    delete process.env.PI_BASH_COMPRESS_SCRIPT;
   }
 
   console.log('OK: all adapter dispatch scenarios passed');

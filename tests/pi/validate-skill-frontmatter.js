@@ -35,7 +35,8 @@ function parseFrontmatter(text) {
       }
       val = parts.join(val === '>' ? ' ' : '\n');
     } else {
-      val = val.replace(/^["']|["']$/g, '');
+      // Strip matching surrounding quotes only — never half-strip.
+      val = val.replace(/^(['"])(.*)\1$/, '$2');
     }
     out[key] = val;
   }

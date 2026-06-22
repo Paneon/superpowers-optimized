@@ -4,7 +4,34 @@ import { runJsHook, parseHookOutput } from './utils';
 // Pi has no SubagentStop equivalent (no sub-agent concept) — the
 // subagent-guard JS hook is intentionally not invoked from this extension.
 
-const STOP_REMINDERS = 'hooks/stop-reminders.js';
+// Path override supports the adapter test fixture. Real Pi installs never
+// set this — they get the production stop-reminders.js.
+const STOP_REMINDERS = process.env.PI_STOP_REMINDERS_SCRIPT || 'hooks/stop-reminders.js';
+
+// Exported for unit testing of the envelope-extraction logic.
+// hooks/stop-reminders.js returns { decision: 'block', reason } (legacy
+// envelope used for broader version compat). Other hooks return
+// { hookSpecificOutput: { additionalContext } }. A plain-text reminder is
+// also surfaced when the script writes non-JSON to stdout.
+export function extractReminder(stdout: string): string | null {
+  const parsed = parseHookOutput(stdout);
+
+  if (parsed) {
+    const hookSpecific = parsed.hookSpecificOutput as
+      | { additionalContext?: string }
+      | undefined;
+    if (typeof hookSpecific?.additionalContext === 'string' && hookSpecific.additionalContext) {
+      return hookSpecific.additionalContext;
+    }
+    if (typeof parsed.reason === 'string' && parsed.reason) {
+      return parsed.reason;
+    }
+    return null;
+  }
+
+  const trimmed = stdout.trim();
+  return trimmed ? trimmed : null;
+}
 
 export function register(api: ExtensionAPI): void {
   api.on('agent_end', async (evt: AgentEndEvent) => {
@@ -16,16 +43,7 @@ export function register(api: ExtensionAPI): void {
 
     try {
       const { stdout } = await runJsHook(STOP_REMINDERS, payload, { timeoutMs: 3000 });
-      const parsed = parseHookOutput(stdout);
-
-      // stop-reminders historically writes the reminder text to stdout (Claude
-      // surfaces it as a system reminder). It may also emit a JSON envelope
-      // with hookSpecificOutput.additionalContext.
-      const hookSpecific = parsed?.hookSpecificOutput as
-        | { additionalContext?: string }
-        | undefined;
-      const reminder = hookSpecific?.additionalContext ?? (parsed === null ? stdout.trim() : null);
-
+      const reminder = extractReminder(stdout);
       if (reminder && api.injectReminder) {
         api.injectReminder(reminder);
       }

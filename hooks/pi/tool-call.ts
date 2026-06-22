@@ -8,9 +8,12 @@ import { runJsHook, parseHookOutput } from './utils';
 // { hookSpecificOutput: { permissionDecision, permissionDecisionReason?, updatedInput? } }
 // or {} for pass-through.
 
-const PROTECT_SECRETS    = 'hooks/safety/protect-secrets.js';
-const BLOCK_DANGEROUS    = 'hooks/safety/block-dangerous-commands.js';
-const BASH_COMPRESS      = 'hooks/bash-compress-hook.js';
+// Script paths can be overridden via env for hermetic testing of edge cases
+// (e.g., a fixture that emits a deny-with-updatedInput envelope). Real Pi
+// installs never set these.
+const PROTECT_SECRETS = process.env.PI_PROTECT_SECRETS_SCRIPT    || 'hooks/safety/protect-secrets.js';
+const BLOCK_DANGEROUS = process.env.PI_BLOCK_DANGEROUS_SCRIPT    || 'hooks/safety/block-dangerous-commands.js';
+const BASH_COMPRESS   = process.env.PI_BASH_COMPRESS_SCRIPT      || 'hooks/bash-compress-hook.js';
 
 const SECRET_GUARDED_TOOLS = new Set(['Read', 'Edit', 'Write', 'Bash']);
 
@@ -29,8 +32,13 @@ function readDecision(stdout: string): HookSpecificOutput | null {
 
 async function callHook(script: string, payload: object): Promise<HookSpecificOutput | null> {
   try {
-    const { stdout } = await runJsHook(script, payload, { timeoutMs: 3000 });
-    return readDecision(stdout);
+    const result = await runJsHook(script, payload, { timeoutMs: 3000 });
+    // Security-relevant: if the hook was killed by timeout or crashed, we
+    // cannot trust its (possibly partial) stdout. The safe move is to
+    // fail-closed at the caller — but that's the caller's policy, not
+    // ours. We surface "no decision" (null) so the caller picks.
+    if (result.timedOut || result.exitCode !== 0) return null;
+    return readDecision(result.stdout);
   } catch {
     return null;
   }
@@ -60,8 +68,14 @@ export function register(api: ExtensionAPI): void {
         return { allow: false, reason: dangerDecision.permissionDecisionReason ?? 'blocked by block-dangerous-commands' };
       }
 
-      // 3) Bash compression rewrites the command. Carries permissionDecision='allow' + updatedInput.
+      // 3) Bash compression rewrites the command. Today the hook only emits
+      //    permissionDecision='allow' + updatedInput, but a future change
+      //    (or a substitute compress hook) could emit 'deny' too. Check
+      //    decision FIRST so a deny is never downgraded to allow.
       const compressDecision = await callHook(BASH_COMPRESS, payload);
+      if (compressDecision?.permissionDecision === 'deny') {
+        return { allow: false, reason: compressDecision.permissionDecisionReason ?? 'blocked by bash-compress-hook' };
+      }
       if (compressDecision?.updatedInput) {
         return { allow: true, transformedParams: compressDecision.updatedInput };
       }

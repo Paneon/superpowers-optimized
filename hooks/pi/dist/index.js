@@ -12,7 +12,19 @@ const input_1 = require("./input");
 const tool_call_1 = require("./tool-call");
 const tool_result_1 = require("./tool-result");
 const agent_end_1 = require("./agent-end");
+// Idempotency: a Pi extension reload (or any double-invocation of the
+// factory) would otherwise add a second subscriber to every event,
+// doubling JS-hook spawn counts and producing conflicting tool_call
+// decisions. We stamp the ExtensionAPI with a sentinel and bail on
+// re-entry.
+const REGISTERED = Symbol.for('superpowers-optimized.pi.registered');
 function superpowersOptimizedPi(api) {
+    const stamped = api;
+    if (stamped[REGISTERED]) {
+        api.log?.('superpowers-optimized: Pi extension already loaded — skipping duplicate registration');
+        return;
+    }
+    stamped[REGISTERED] = true;
     (0, session_start_1.register)(api);
     (0, before_agent_start_1.register)(api);
     (0, input_1.register)(api);

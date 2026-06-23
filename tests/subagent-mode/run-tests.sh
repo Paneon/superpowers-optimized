@@ -142,10 +142,12 @@ test_brainstorming_has_tier_aware_section() {
 }
 
 test_writing_plans_has_tier_aware_thresholds() {
-  bold "Writing-plans: tier-aware thresholds"
+  bold "Writing-plans: tier prior + scope judgment Selection Logic"
   local f="$PLUGIN_ROOT/skills/writing-plans/SKILL.md"
-  assert "balanced threshold present" \
-    "$([ "$(grep -c 'context ≥75% OR ≥8 disjoint tasks' "$f")" -ge 1 ] && echo yes || echo no)" "yes"
+  assert "tier prior + scope judgment heading present" \
+    "$([ "$(grep -c 'tier prior + scope judgment' "$f")" -ge 1 ] && echo yes || echo no)" "yes"
+  assert "execution sub-skill placeholder present" \
+    "$([ "$(grep -c '<EXECUTION_SUB_SKILL>' "$f")" -ge 1 ] && echo yes || echo no)" "yes"
   assert "reactive ask for plan drafting" \
     "$([ "$(grep -c 'Dispatch a subagent for it? \[y/N\]' "$f")" -ge 1 ] && echo yes || echo no)" "yes"
 }

@@ -569,9 +569,11 @@ Controls how aggressively the skillset dispatches subagents. Subagents fight con
 subagent_mode=balanced   # inline-first | balanced | aggressive
 ```
 
-- **`inline-first`** — minimize subagent use. Plan execution stays inline unless the user explicitly opts in. Code review runs in the main loop. Brainstorming and writing-plans ask before any drafting dispatch. Best for token-constrained plans.
-- **`balanced`** *(default)* — subagents only when they clearly pay off: context ≥75% full, ≥8 disjoint plan tasks, or ≥3 truly parallel tasks. Code review runs inline. Brainstorming/writing-plans still ask before drafting dispatch.
-- **`aggressive`** — subagent-heavy. Plan execution dispatches at the original 60%/≥5 thresholds, code review dispatches its own subagent, brainstorming/writing-plans may dispatch for drafting without asking. Best for Max-plan users who treat subagents as the default tool against context rot.
+- **`inline-first`** — minimize subagent use. `writing-plans` defaults to Inline; it only proposes Subagent-Driven if scope *overwhelmingly* warrants it (and asks before switching). Code review runs in the main loop. Brainstorming and writing-plans ask before any drafting dispatch. Best for token-constrained plans.
+- **`balanced`** *(default)* — `writing-plans` defaults to Inline but uses model judgment on the actual plan scope; if independent disjoint tasks or context pressure suggest Subagent-Driven would fit better, it asks before switching. Code review runs inline. Brainstorming/writing-plans still ask before any drafting dispatch.
+- **`aggressive`** — `writing-plans` defaults to Subagent-Driven; proposes Inline only when scope is small or tightly coupled (and asks before switching). Code review dispatches its own subagent. Brainstorming/writing-plans may dispatch for drafting without asking. Best for Max-plan users who treat subagents as the default tool against context rot.
+
+In all tiers the resolved execution mode is **written into the plan file header at generation time** — the plan tells the reader directly which sub-skill to invoke, with no opaque pointer to ambient state.
 
 Default when unset, invalid, or unreadable: `balanced`. Tier is locked at session start — edit and restart Claude to apply.
 

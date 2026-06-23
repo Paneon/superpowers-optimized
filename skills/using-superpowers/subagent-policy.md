@@ -18,7 +18,7 @@ Default when unset, invalid, or unreadable: **balanced**.
 
 | Decision point                                                   | inline-first                     | balanced (default)                  | aggressive                            |
 | ---------------------------------------------------------------- | -------------------------------- | ----------------------------------- | ------------------------------------- |
-| `writing-plans` Selection Logic → Subagent-Driven                | only on explicit user request    | context ≥75% OR ≥8 disjoint tasks   | context ≥60% OR ≥5 disjoint tasks     |
+| `writing-plans` Selection Logic                                  | default **Inline**; propose Subagent only on overwhelming scope (ask before switching) | default **Inline**; propose Subagent if scope warrants it (ask before switching) | default **Subagent-Driven**; propose Inline if scope is small or coupled (ask before switching) |
 | `subagent-driven-development` dispatch                           | not without user opt-in          | true parallel waves only (≥3 disjoint) | freely                             |
 | `requesting-code-review` reviewer subagent                       | inline review                    | inline review                       | dispatch subagent                     |
 | `dispatching-parallel-agents`                                    | discouraged; propose inline      | allowed when independence proven    | freely                                |
@@ -54,7 +54,7 @@ verbatim inside `<dispatch-thresholds>`. Keep each tier's rules to one line per 
 point — the block lands in every turn's context, so concision matters.
 
 <!-- TIER-RULES:inline-first START -->
-writing-plans Selection Logic → Subagent-Driven: only on explicit user request; otherwise Inline.
+writing-plans Selection Logic: default **Inline**. Assess the actual plan scope; propose Subagent-Driven only if scope overwhelmingly warrants it. Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
 subagent-driven-development dispatch: not without explicit user opt-in.
 requesting-code-review reviewer subagent: run inline review.
 dispatching-parallel-agents: discouraged; propose inline first.
@@ -63,7 +63,7 @@ brainstorming / writing-plans invocation: always run in the main loop (interacti
 <!-- TIER-RULES:inline-first END -->
 
 <!-- TIER-RULES:balanced START -->
-writing-plans Selection Logic → Subagent-Driven: context ≥75% OR ≥8 disjoint tasks; else Inline.
+writing-plans Selection Logic: default **Inline**. Assess the actual plan scope; propose Subagent-Driven if scope warrants it (independent disjoint tasks, parallel wall-clock wins, or context pressure). Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
 subagent-driven-development dispatch: true parallel waves only (≥3 disjoint tasks).
 requesting-code-review reviewer subagent: run inline review.
 dispatching-parallel-agents: allowed when independence proven.
@@ -72,7 +72,7 @@ brainstorming / writing-plans invocation: always run in the main loop (interacti
 <!-- TIER-RULES:balanced END -->
 
 <!-- TIER-RULES:aggressive START -->
-writing-plans Selection Logic → Subagent-Driven: context ≥60% OR ≥5 disjoint tasks; else Inline.
+writing-plans Selection Logic: default **Subagent-Driven**. Assess the actual plan scope; propose Inline only if scope is small or tightly coupled. Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
 subagent-driven-development dispatch: dispatch freely for any independent work.
 requesting-code-review reviewer subagent: dispatch the code-reviewer subagent.
 dispatching-parallel-agents: dispatch freely when standard independence checks hold.

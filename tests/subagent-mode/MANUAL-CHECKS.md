@@ -4,26 +4,26 @@ The grep-based test runner (`run-tests.sh`) verifies that the policy doc, hook o
 
 Each scenario assumes a fresh Claude Code session is opened from this repo root **after** editing `~/.config/superpowers/config.conf`.
 
-## 1. `writing-plans` Selection Logic respects the tier
+## 1. `writing-plans` Selection Logic respects the tier prior + scope judgment
 
-**Setup.** Complete a brainstorming session for a small feature so a design spec exists. The plan that `writing-plans` produces should have **3 tasks**, all touching disjoint files.
+**Setup.** Complete a brainstorming session for a small feature so a design spec exists.
 
-**Run for each tier value** (`inline-first`, `balanced`, `aggressive`):
+**Run for each tier value** (`inline-first`, `balanced`, `aggressive`), with a **small plan (3 tasks, shared state)**:
 1. Set `subagent_mode=<tier>` in `~/.config/superpowers/config.conf` and restart Claude.
 2. Invoke `writing-plans`.
-3. Read the "Ready Message" emitted at the end.
+3. Read the "Ready Message" and check the plan file's `REQUIRED SUB-SKILL` header.
 
-**Expected:**
-- `inline-first`: Ready Message reports `Inline Execution` (no user opt-in given).
-- `balanced`: `Inline Execution` (3 tasks < 8 threshold).
-- `aggressive`: `Inline Execution` (3 tasks < 5 threshold).
+**Expected for the small plan:**
+- `inline-first`: silently uses Inline (tier default + scope agrees). Header says `executing-plans`.
+- `balanced`: silently uses Inline (tier default + scope agrees). Header says `executing-plans`.
+- `aggressive`: tier default is Subagent-Driven, but scope is small/coupled → the model should **ask** before switching to Inline. If you say yes, header says `executing-plans`.
 
-Then **repeat with a 6-task plan** (independent, disjoint files):
-- `inline-first`: still `Inline` (no opt-in).
-- `balanced`: still `Inline` (6 < 8).
-- `aggressive`: `Subagent-Driven Execution` (6 ≥ 5).
+Then **repeat with a clearly parallel plan (6+ disjoint tasks, separate subsystems, no shared state)**:
+- `inline-first`: tier default is Inline, but scope strongly suggests Subagent-Driven → the model **asks**; default-no means it stays Inline unless you say yes (`inline-first` requires *overwhelming* scope evidence to even ask).
+- `balanced`: tier default is Inline, but scope warrants Subagent-Driven → the model **asks**; if yes, header says `subagent-driven-development`.
+- `aggressive`: silently uses Subagent-Driven (tier default + scope agrees). Header says `subagent-driven-development`.
 
-This confirms the tier-aware threshold logic in `skills/writing-plans/SKILL.md` is actually being applied.
+This confirms two things: (1) tier is a *prior*, not a verdict — model judgment on actual scope can push the proposal toward the non-default mode; (2) the chosen mode is **baked into the plan header** so the reader sees it directly, no ambient indirection.
 
 ## 2. Reactive ask before drafting dispatch (the regression test)
 

@@ -41,7 +41,9 @@ of any curated `docs/` tree. (User preferences for plan location override this.)
 ```markdown
 # <Feature Name> Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL — pick `superpowers-optimized:executing-plans` (inline) or `superpowers-optimized:subagent-driven-development` based on the active `subagent_mode` tier (see ambient `<dispatch-thresholds>` and `skills/using-superpowers/subagent-policy.md`). Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL — `<EXECUTION_SUB_SKILL>`. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Resolve `<EXECUTION_SUB_SKILL>` at plan-generation time** (see Selection Logic below) and write the chosen value into this line before saving the plan. The two valid values are `superpowers-optimized:executing-plans` (inline) or `superpowers-optimized:subagent-driven-development` (subagent-driven). Do not leave the placeholder unresolved — the plan file must tell the reader, with no indirection, which skill to invoke.
 
 **Goal:** <single sentence>
 **Architecture:** <2-4 sentences>
@@ -126,25 +128,43 @@ Fix issues inline; no re-review.
 After saving and self-review, auto-select the execution approach, output the ready
 message, and **stop**. Do not invoke any execution skill until the user replies.
 
-### Selection Logic (tier-aware)
+### Selection Logic (tier prior + scope judgment)
 
-Read the active tier from the ambient `<subagent-mode>` block in session context (set by `~/.config/superpowers/config.conf`; full matrix in `skills/using-superpowers/subagent-policy.md`). Then evaluate in order:
+Numeric thresholds are a crude proxy for what actually decides whether a subagent pays off. You are better than those thresholds — read the *actual plan you just wrote* and judge fit. The active tier from the ambient `<subagent-mode>` block is a *prior*, not a verdict.
 
-**Tier = `inline-first`:**
-1. User explicitly requested Subagent-Driven → **Subagent-Driven**
-2. Default → **Inline**
+**Step 1 — Tier default** (read `<subagent-mode>` from session context; full matrix in `skills/using-superpowers/subagent-policy.md`):
 
-**Tier = `balanced` (default):** Subagent-Driven when **context ≥75% OR ≥8 disjoint tasks**; else Inline. (Disjoint = tasks touch separate files and have no sequential dependency.)
+| Tier            | Default mode      | Bias for proposing the other mode                                      |
+| --------------- | ----------------- | ----------------------------------------------------------------------- |
+| `inline-first`  | Inline            | Propose Subagent-Driven only if scope **overwhelmingly** warrants it.   |
+| `balanced`      | Inline            | Propose Subagent-Driven if scope warrants it (no "overwhelming" needed).|
+| `aggressive`    | Subagent-Driven   | Propose Inline if scope is small or tightly coupled.                    |
 
-**Tier = `aggressive`:** Subagent-Driven when **context ≥60% OR ≥5 disjoint tasks**; else Inline.
+**Step 2 — Scope assessment.** Look at the plan you just wrote and reason about fit. Inputs that favor Subagent-Driven:
+- Many genuinely independent tasks (file-disjoint, no shared in-memory state, no sequential dependency)
+- High current context window pressure (offloading per-task context to fresh subagents has clear value)
+- Tasks where parallel wall-clock wins matter (long-running each)
+
+Inputs that favor Inline:
+- Few tasks, or tasks that share state / files / patterns
+- Subtle interface coupling where one task's design informs the next
+- A plan small enough that per-subagent setup cost exceeds the work
+
+**Step 3 — Decision.**
+
+- If scope assessment **agrees with the tier default** → use the default, *silently*. No ask.
+- If scope assessment **points to the non-default mode** → ask the user with your reasoning: `"Tier default is <DEFAULT> for this plan, but <N> tasks across disjoint files (or: high context pressure / clear parallel wins) suggest <OTHER> would fit better. Go with <OTHER>? [y/N]"`. Default no (stick with the tier default unless the user agrees).
+
+**Step 4 — Bake the resolved mode into the plan header** (replace `<EXECUTION_SUB_SKILL>` in the plan template with `superpowers-optimized:executing-plans` or `superpowers-optimized:subagent-driven-development`). The plan file must state the chosen skill directly — no pointer to ambient state the reader can't see.
 
 **Plan drafting itself (this skill, right now):** under `inline-first` or `balanced`, if you consider dispatching a subagent to *draft the plan*, ask first: `"This would normally run inline. Dispatch a subagent for it? [y/N]"`. Default no. Under `aggressive`, dispatch freely. Pre-design research (e.g., `Explore` to map related files) is not "drafting" and follows the normal tier rules.
 
 ### Ready Message
 ```
-Plan saved to `.claude/plans/<filename>.md`. Ready to execute with **[Subagent-Driven / Inline Execution]** (<N> tasks[, <one-word reason>]). Reply to start, or say "inline" / "subagent" to switch.
+Plan saved to `.claude/plans/<filename>.md` — execution mode **[Subagent-Driven / Inline]** baked in (<N> tasks, tier=<tier>[, one-word reason]). Reply to start, or say "inline" / "subagent" to switch (I'll update the plan header).
 ```
 
 **Stop here.** On reply:
 - **Subagent-Driven:** REQUIRED SUB-SKILL — `superpowers-optimized:subagent-driven-development`
 - **Inline:** REQUIRED SUB-SKILL — `superpowers-optimized:executing-plans`
+- **If the user switches** the mode after the Ready Message, update `<EXECUTION_SUB_SKILL>` in the plan file before handing off — the plan must stay accurate.

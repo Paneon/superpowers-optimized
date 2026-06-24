@@ -466,20 +466,33 @@ This is the full cross-platform hook inventory for the plugin. Claude Code gets 
 
 ### Cursor
 
-**Install**
+This is a fork, and Cursor resolves plugins by **marketplace (source repo)** rather than by name — a bare `superpowers-optimized` would not point at this fork. So you must register this repository as a marketplace source first, then install the plugin from it.
+
+**1. Register this fork as a marketplace**
+
+In Cursor: **Dashboard → Settings → Plugins → Team Marketplaces → Import from Repo**, then paste the repo URL:
+
 ```
-/plugin-add superpowers-optimized
+https://github.com/Paneon/superpowers-optimized
 ```
+
+> Use **your own fork's** URL here if you re-forked. The marketplace name (derived from the repo) is what disambiguates this fork from the upstream — both share the plugin name `superpowers-optimized`.
+
+Cursor parses the plugin from this repo's `.cursor-plugin/plugin.json` manifest. Review the parsed plugin, set team access if prompted, and save.
+
+**2. Install**
+
+In the editor, run `/add-plugin` and pick **superpowers-optimized** from the marketplace you just added (it appears scoped as `superpowers-optimized@<marketplace>`).
 
 **Update**
-```
-/plugin-update superpowers-optimized
-```
+
+Re-run `/add-plugin` and update from the same marketplace, or refresh the marketplace from **Dashboard → Settings → Plugins**. Cursor pulls the latest from the registered repo — push to your fork to ship changes.
 
 **Uninstall**
-```
-/plugin-remove superpowers-optimized
-```
+
+Remove the plugin from **Dashboard → Settings → Plugins** (and drop the marketplace if you no longer need the source).
+
+> **Local development note:** Cursor installs from the registered GitHub repo, so there is no live working-tree / symlink install (unlike the Claude Code and Pi dev flows). Iterating means pushing to your fork and refreshing the marketplace.
 
 ---
 

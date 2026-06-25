@@ -68,6 +68,8 @@ digraph sdd_process {
 
 ## Inline vs Subagent (don't pay for context you don't need)
 
+Before deciding, consult the ambient `<dispatch-thresholds>` block emitted by SessionStart (see `skills/using-superpowers/subagent-policy.md` for the full matrix). The rules below apply when the active tier is `aggressive`; under `balanced` the threshold is stricter (≥3 disjoint tasks required for any dispatch) and under `inline-first` dispatch is not used without explicit user opt-in.
+
 A subagent's isolated context is a real cost. Dispatch one only when it pays off:
 
 - **Small/coupled plan (few tasks, shared state):** execute **inline** in this session. No dispatch.

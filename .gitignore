@@ -26,3 +26,4 @@ plugin.universal.old.yaml
 # Node build artifacts (hooks/pi/dist/ IS tracked — it's the shipped Pi extension)
 node_modules/
 package-lock.json
+docs/specs

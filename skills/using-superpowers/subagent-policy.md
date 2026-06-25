@@ -1,0 +1,81 @@
+# Subagent Dispatch Policy
+
+Single source of truth for tier-aware subagent dispatch decisions. The `SessionStart`
+hook reads this file and emits the active tier's rules as an ambient
+`<dispatch-thresholds>` block into session context. All dispatch-decision skills
+(`writing-plans`, `subagent-driven-development`, `dispatching-parallel-agents`,
+`requesting-code-review`, `brainstorming`, `using-superpowers`) consult that block.
+
+The user's tier comes from `~/.config/superpowers/config.conf`:
+
+```ini
+subagent_mode=balanced   # inline-first | balanced | aggressive
+```
+
+Default when unset, invalid, or unreadable: **balanced**.
+
+## Threshold Matrix
+
+| Decision point                                                   | inline-first                     | balanced (default)                  | aggressive                            |
+| ---------------------------------------------------------------- | -------------------------------- | ----------------------------------- | ------------------------------------- |
+| `writing-plans` Selection Logic                                  | default **Inline**; propose Subagent only on overwhelming scope (ask before switching) | default **Inline**; propose Subagent if scope warrants it (ask before switching) | default **Subagent-Driven**; propose Inline if scope is small or coupled (ask before switching) |
+| `subagent-driven-development` dispatch                           | not without user opt-in          | true parallel waves only (≥3 disjoint) | freely                             |
+| `requesting-code-review` reviewer subagent                       | inline review                    | inline review                       | dispatch subagent                     |
+| `dispatching-parallel-agents`                                    | discouraged; propose inline      | allowed when independence proven    | freely                                |
+| `brainstorming` / `writing-plans` drafting <sup>†</sup>          | ask user first; default no       | ask user first; default no          | dispatch freely                       |
+| `brainstorming` / `writing-plans` invocation by parent <sup>‡</sup> | always main loop (dialog required) | always main loop (dialog required) | parent may dispatch as headless subagent |
+
+<sup>†</sup> "Drafting" means writing the spec or plan output itself. Pre-design *research*
+(e.g., dispatching `Explore` to map the codebase) is not drafting and follows the normal
+dispatch rules for the active tier.
+
+<sup>‡</sup> Headless invocation means the dispatched subagent skips interactive steps
+(clarifying questions, design approval, spec review) and returns a best-guess spec or
+plan for the parent to present to the user. Useful under `aggressive` for scope
+decomposition (e.g., parallel brainstorms across N sub-systems). Under non-aggressive
+tiers, the interactive dialog is the point of these skills — dispatching breaks them.
+
+## Hard Rule Notes
+
+- **Reactive ask format.** Under `inline-first` and `balanced`, when the model considers
+  dispatching a subagent for *drafting*, it must first ask the user:
+  `"This would normally run inline. Dispatch a subagent for it? [y/N]"`. Default is no.
+  Only proceed on explicit yes.
+- **Explicit user instructions win.** Per `using-superpowers` Instruction Priority, an
+  explicit user instruction ("dispatch aggressively for this task") overrides the tier's
+  default. This is the documented override path.
+- **Tier is locked at session start.** Editing `config.conf` mid-session has no effect
+  until the next session.
+
+## Tier Rules (consumed by the SessionStart hook)
+
+The hook extracts the active tier's block between its sentinels and emits the contents
+verbatim inside `<dispatch-thresholds>`. Keep each tier's rules to one line per decision
+point — the block lands in every turn's context, so concision matters.
+
+<!-- TIER-RULES:inline-first START -->
+writing-plans Selection Logic: default **Inline**. Assess the actual plan scope; propose Subagent-Driven only if scope overwhelmingly warrants it. Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
+subagent-driven-development dispatch: not without explicit user opt-in.
+requesting-code-review reviewer subagent: run inline review.
+dispatching-parallel-agents: discouraged; propose inline first.
+brainstorming / writing-plans drafting: ASK the user before dispatching a subagent ("This would normally run inline. Dispatch a subagent for it? [y/N]") — proceed only on explicit yes.
+brainstorming / writing-plans invocation: always run in the main loop (interactive dialog required); never dispatch as a subagent.
+<!-- TIER-RULES:inline-first END -->
+
+<!-- TIER-RULES:balanced START -->
+writing-plans Selection Logic: default **Inline**. Assess the actual plan scope; propose Subagent-Driven if scope warrants it (independent disjoint tasks, parallel wall-clock wins, or context pressure). Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
+subagent-driven-development dispatch: true parallel waves only (≥3 disjoint tasks).
+requesting-code-review reviewer subagent: run inline review.
+dispatching-parallel-agents: allowed when independence proven.
+brainstorming / writing-plans drafting: ASK the user before dispatching a subagent ("This would normally run inline. Dispatch a subagent for it? [y/N]") — proceed only on explicit yes.
+brainstorming / writing-plans invocation: always run in the main loop (interactive dialog required); never dispatch as a subagent.
+<!-- TIER-RULES:balanced END -->
+
+<!-- TIER-RULES:aggressive START -->
+writing-plans Selection Logic: default **Subagent-Driven**. Assess the actual plan scope; propose Inline only if scope is small or tightly coupled. Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
+subagent-driven-development dispatch: dispatch freely for any independent work.
+requesting-code-review reviewer subagent: dispatch the code-reviewer subagent.
+dispatching-parallel-agents: dispatch freely when standard independence checks hold.
+brainstorming / writing-plans drafting: dispatch freely when useful (no ask required).
+brainstorming / writing-plans invocation: a parent flow may dispatch them as headless subagents (subagent skips user-dialog steps and returns a best-guess spec or plan for the parent to present).
+<!-- TIER-RULES:aggressive END -->

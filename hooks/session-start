@@ -56,6 +56,82 @@ is_auto_update_enabled() {
     return 0
 }
 
+read_subagent_mode() {
+    # Reads ~/.config/superpowers/config.conf for the subagent_mode key.
+    # Echoes one of: inline-first | balanced | aggressive.
+    # Falls back to balanced on missing key, missing file, unreadable file, or invalid value.
+    local cfg_file="${HOME}/.config/superpowers/config.conf"
+    local mode="balanced"
+    if [ -f "$cfg_file" ]; then
+        local parsed
+        parsed=$(awk -F '=' '
+            /^[[:space:]]*subagent_mode[[:space:]]*=/ {
+                v=$2
+                gsub(/#.*/, "", v)
+                gsub(/[[:space:]]/, "", v)
+                print tolower(v)
+                exit
+            }
+        ' "$cfg_file" 2>/dev/null || echo "")
+        case "$parsed" in
+            inline-first|balanced|aggressive) mode="$parsed" ;;
+        esac
+    fi
+    echo "$mode"
+}
+
+read_tier_rules() {
+    # Reads the rules block for the requested tier from subagent-policy.md.
+    # Falls back to a hardcoded copy when the doc is missing or the block is empty.
+    local tier="$1"
+    local doc="${PLUGIN_ROOT}/skills/using-superpowers/subagent-policy.md"
+    local extracted=""
+    if [ -f "$doc" ]; then
+        extracted=$(awk -v tier="$tier" '
+            $0 ~ ("<!-- TIER-RULES:" tier " START -->") {flag=1; next}
+            $0 ~ ("<!-- TIER-RULES:" tier " END -->") {flag=0}
+            flag {print}
+        ' "$doc" 2>/dev/null || echo "")
+    fi
+    if [ -n "$extracted" ]; then
+        printf '%s' "$extracted"
+        return
+    fi
+    # Hardcoded fallback — kept in sync with subagent-policy.md tier blocks.
+    case "$tier" in
+        inline-first)
+            cat <<'FALLBACK_INLINE_FIRST'
+writing-plans Selection Logic: default **Inline**. Assess the actual plan scope; propose Subagent-Driven only if scope overwhelmingly warrants it. Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
+subagent-driven-development dispatch: not without explicit user opt-in.
+requesting-code-review reviewer subagent: run inline review.
+dispatching-parallel-agents: discouraged; propose inline first.
+brainstorming / writing-plans drafting: ASK the user before dispatching a subagent ("This would normally run inline. Dispatch a subagent for it? [y/N]") — proceed only on explicit yes.
+brainstorming / writing-plans invocation: always run in the main loop (interactive dialog required); never dispatch as a subagent.
+FALLBACK_INLINE_FIRST
+            ;;
+        aggressive)
+            cat <<'FALLBACK_AGGRESSIVE'
+writing-plans Selection Logic: default **Subagent-Driven**. Assess the actual plan scope; propose Inline only if scope is small or tightly coupled. Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
+subagent-driven-development dispatch: dispatch freely for any independent work.
+requesting-code-review reviewer subagent: dispatch the code-reviewer subagent.
+dispatching-parallel-agents: dispatch freely when standard independence checks hold.
+brainstorming / writing-plans drafting: dispatch freely when useful (no ask required).
+brainstorming / writing-plans invocation: a parent flow may dispatch them as headless subagents (subagent skips user-dialog steps and returns a best-guess spec or plan for the parent to present).
+FALLBACK_AGGRESSIVE
+            ;;
+        *)
+            cat <<'FALLBACK_BALANCED'
+writing-plans Selection Logic: default **Inline**. Assess the actual plan scope; propose Subagent-Driven if scope warrants it (independent disjoint tasks, parallel wall-clock wins, or context pressure). Ask the user before switching away from the default. Bake the chosen mode directly into the plan header — no opaque pointer.
+subagent-driven-development dispatch: true parallel waves only (≥3 disjoint tasks).
+requesting-code-review reviewer subagent: run inline review.
+dispatching-parallel-agents: allowed when independence proven.
+brainstorming / writing-plans drafting: ASK the user before dispatching a subagent ("This would normally run inline. Dispatch a subagent for it? [y/N]") — proceed only on explicit yes.
+brainstorming / writing-plans invocation: always run in the main loop (interactive dialog required); never dispatch as a subagent.
+FALLBACK_BALANCED
+            ;;
+    esac
+}
+
 check_for_updates() {
     local cache_dir="${HOME}/.claude/hooks-logs"
     local cache_file="${cache_dir}/update-check.cache"
@@ -417,6 +493,11 @@ if [ -f "context-snapshot.json" ]; then
     fi
 fi
 
+# ── Subagent mode ambient block ───────────────────────────────────────────────
+subagent_mode_value=$(read_subagent_mode)
+subagent_mode_rules=$(read_tier_rules "$subagent_mode_value")
+subagent_mode_content=$(printf '\n\n<subagent-mode>%s</subagent-mode>\n<dispatch-thresholds>\n%s\n</dispatch-thresholds>' "$subagent_mode_value" "$subagent_mode_rules")
+
 # ── Load using-superpowers skill body ─────────────────────────────────────────
 using_superpowers_content=$(awk '
 NR == 1 && $0 == "---" { in_frontmatter = 1; next }
@@ -444,8 +525,9 @@ session_log_escaped=$(escape_for_json "$session_log_content")
 state_escaped=$(escape_for_json "$state_content")
 known_issues_escaped=$(escape_for_json "$known_issues_content")
 context_snapshot_escaped=$(escape_for_json "$context_snapshot_content")
+subagent_mode_escaped=$(escape_for_json "$subagent_mode_content")
 
-session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers-optimized.\n\n**The \`superpowers-optimized:using-superpowers\` guidance is loaded below. For all other skills, use the \`Skill\` tool.**\n\n**MANDATORY FIRST ACTIONS — before ANY tool calls beyond reading files:**\n1. Silently activate token-efficiency (its rules apply immediately)\n2. Classify the task complexity (micro/lightweight/full) per the Entry Sequence below\n3. If the user names a specific skill (e.g. use brainstorming, use context management), that IS a Skill tool invocation — call \`Skill\` with that skill name. Do NOT re-implement the skill's purpose with ad-hoc agents or manual steps.\n\n${using_superpowers_escaped}\n\n${warning_escaped}${update_escaped}${git_escaped}\n</EXTREMELY_IMPORTANT>${project_map_escaped}${session_log_escaped}${state_escaped}${known_issues_escaped}${context_snapshot_escaped}"
+session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers-optimized.\n\n**The \`superpowers-optimized:using-superpowers\` guidance is loaded below. For all other skills, use the \`Skill\` tool.**\n\n**MANDATORY FIRST ACTIONS — before ANY tool calls beyond reading files:**\n1. Silently activate token-efficiency (its rules apply immediately)\n2. Classify the task complexity (micro/lightweight/full) per the Entry Sequence below\n3. If the user names a specific skill (e.g. use brainstorming, use context management), that IS a Skill tool invocation — call \`Skill\` with that skill name. Do NOT re-implement the skill's purpose with ad-hoc agents or manual steps.\n\n${using_superpowers_escaped}\n\n${warning_escaped}${update_escaped}${git_escaped}\n</EXTREMELY_IMPORTANT>${subagent_mode_escaped}${project_map_escaped}${session_log_escaped}${state_escaped}${known_issues_escaped}${context_snapshot_escaped}"
 
 # ── Output ─────────────────────────────────────────────────────────────────────
 # Uses printf instead of heredoc (cat <<EOF) to work around a bash 5.3+

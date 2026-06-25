@@ -17,6 +17,17 @@ Turn rough requests into an approved design before implementation.
 
 Do not write code, edit files, or invoke implementation skills until design approval is explicit.
 
+## Subagent dispatch (tier-aware)
+
+The active subagent mode is published as the ambient `<subagent-mode>` and `<dispatch-thresholds>` block in session context (emitted by SessionStart from `~/.config/superpowers/config.conf`; the full matrix lives in `skills/using-superpowers/subagent-policy.md`). Consult that block before dispatching.
+
+Rule for *drafting* — writing the spec document, drafting design sections, doing the spec self-review:
+
+- Under `inline-first` or `balanced`: if you consider dispatching a subagent for drafting, you MUST first ask the user: `"This would normally run inline. Dispatch a subagent for it? [y/N]"`. Default is no. Proceed only on explicit yes.
+- Under `aggressive`: dispatching for drafting is permitted without asking.
+
+Pre-design *research* (e.g., dispatching `Explore` to map the codebase, fetching docs) is not "drafting" and follows the normal dispatch rules for the active tier — no ask required just because the tier is non-aggressive.
+
 ## Anti-Pattern: "This Is Too Simple To Need A Design"
 
 Every project goes through this process. A todo list, a single-function utility, a config change — all of them. "Simple" projects are where unexamined assumptions cause the most wasted work. The design can be short (a few sentences for truly simple projects), but you MUST present it and get approval.
@@ -35,7 +46,7 @@ Every project goes through this process. A todo list, a single-function utility,
    - **Minor** (edge case, acceptable limitation): document as a non-goal in the design.
    Do not skip this step. An approach that survives adversarial questioning is an approach worth approving.
 9. Save approved design to `docs/specs/YYYY-MM-DD-<topic>-design.md`.
-10. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see Spec Self-Review below). Fix issues inline; no subagent dispatch needed.
+10. **Spec self-review** — quick inline check for placeholders, contradictions, ambiguity, scope (see Spec Self-Review below). Fix issues inline. Subagent dispatch for self-review follows the tier rules in `## Subagent dispatch (tier-aware)` above — `aggressive` may dispatch freely; other tiers must ask first.
 11. **User reviews written spec** — ask user to review the spec file before proceeding (see User Review Gate below).
 12. Invoke `writing-plans`.
 
@@ -84,7 +95,7 @@ After writing the spec document, look at it with fresh eyes:
 3. **Scope check:** Is this focused enough for a single implementation plan, or does it need decomposition?
 4. **Ambiguity check:** Could any requirement be interpreted two different ways? If so, pick one and make it explicit.
 
-Fix any issues inline. No need to re-review — just fix and move on.
+Fix any issues inline. No need to re-review — just fix and move on. Subagent dispatch for any of these checks follows the tier rules in `## Subagent dispatch (tier-aware)`.
 
 ## User Review Gate
 

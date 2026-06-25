@@ -7,7 +7,8 @@
     "build": "tsc -p .",
     "build:watch": "tsc -p . --watch",
     "test:pi": "bash tests/pi/run-tests.sh",
-    "test:smart-compress": "bash tests/smart-compress/run-tests.sh"
+    "test:smart-compress": "bash tests/smart-compress/run-tests.sh",
+    "test:subagent-mode": "bash tests/subagent-mode/run-tests.sh"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

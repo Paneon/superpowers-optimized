@@ -14,6 +14,8 @@ Use parallel subagents only for truly independent work.
 
 ## Decision Check
 
+Consult the ambient `<dispatch-thresholds>` block first. Under `inline-first`, dispatch is discouraged — propose inline first. Under `balanced`, all three independence conditions below must hold AND there must be **≥3 disjoint tasks**. Under `aggressive`, the original conditions below apply without the count floor.
+
 Use parallel dispatch when all are true:
 - Problems have separate root causes.
 - Tasks do not edit the same files.

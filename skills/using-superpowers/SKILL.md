@@ -172,6 +172,7 @@ digraph planmode_intercept {
 - Dependency updates, security vulnerabilities, migrations: `dependency-management` (audit → assess impact → update incrementally → verify)
 - UI/frontend implementation: apply `frontend-design` standards
 - CLAUDE.md / AGENTS.md creation or update: `claude-md-creator` (applies at any complexity level — never implement directly)
+- Subagent dispatch governance: every dispatch decision must consult the ambient `<dispatch-thresholds>` block emitted at session start. Full matrix lives in `skills/using-superpowers/subagent-policy.md`.
 - *(Internal skills — not directly routed):* `self-consistency-reasoner` is invoked internally by `systematic-debugging` and `verification-before-completion`; do not invoke it directly. `token-efficiency` is always-on and invoked at step 1 of the Entry Sequence.
 
 ## Context Hygiene

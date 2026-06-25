@@ -1,10 +1,12 @@
 # Superpowers Optimized Release Notes
 
-## v6.7.0 (2026-06-22)
+## v6.7.0 (2026-06-25)
 
-Tier-aware subagent dispatch via the new `subagent_mode` config.
+Pi (pi.dev) platform support at Claude-Code hook parity, tier-aware subagent dispatch via the new `subagent_mode` config, and corrected Cursor install docs.
 
 ### New Features
+
+**Pi (pi.dev) platform support** — superpowers-optimized now runs on Pi at Claude-Code hook parity. A compiled TypeScript extension (`hooks/pi/`, shipped as git-tracked `hooks/pi/dist/` so end users need no TS tooling) translates Pi's lifecycle events to the existing stdin-JSON hook contract and spawns the same `hooks/*.js` bodies every other platform uses — the JS hooks stay the single source of truth, no logic duplication. The Claude hook set maps onto Pi events: `session_start` → `before_agent_start` (cached context surfaced via `systemPrompt`), `tool_call` (dispatched secrets → dangerous-bash → bash-compress, in that order so `.env` reads and `rm -rf /` are blocked before any rewrite), `tool_result` (Bash output replacement), and `agent_end` (`ctx.ui.notify`). `permissionDecision: 'ask'` routes to `ctx.ui.confirm()`, failing closed in headless mode. Two documented gaps versus Claude: `track-session-stats` (Pi exposes no skill-expansion signal) and `subagent-guard` (Pi has no sub-agent concept). Install per `.pi/INSTALL.md`; full parity table in `docs/platforms/pi.md`.
 
 **`subagent_mode` config (`~/.config/superpowers/config.conf`)** — Subagent dispatch is now **balanced by default**. Previously, plans with ≥5 disjoint tasks or sessions at ≥60% context would auto-dispatch subagent execution, and code review always spawned a `code-reviewer` subagent. The new `balanced` default flips `writing-plans` to **Inline by default** and uses model judgment on the actual plan scope — only proposing Subagent-Driven (with user confirmation) when the plan genuinely warrants it. Code review runs inline. Under `inline-first` subagent dispatch is reserved for the user's explicit say-so. Tier values: `inline-first` | `balanced` | `aggressive`. To restore the previous behavior, set `subagent_mode=aggressive`. The motivation: on lower-tier plans (20€/100€), the previous defaults could burn ~25% of weekly token budget on a single task because each subagent re-receives setup and project context.
 
@@ -17,6 +19,10 @@ Tier-aware subagent dispatch via the new `subagent_mode` config.
 **Ambient `<dispatch-thresholds>` block** — SessionStart now injects the active tier's dispatch rules into session context (read from `skills/using-superpowers/subagent-policy.md`, with a hardcoded fallback). All dispatch-decision skills (`writing-plans`, `subagent-driven-development`, `dispatching-parallel-agents`, `requesting-code-review`, `brainstorming`, `using-superpowers`) consult this block at the point of decision.
 
 Full threshold matrix: `skills/using-superpowers/subagent-policy.md`. Behavior verification: `bash tests/subagent-mode/run-tests.sh` and the manual checklist at `tests/subagent-mode/MANUAL-CHECKS.md`.
+
+### Docs
+
+**Corrected Cursor install instructions** — The previous Cursor steps (`/plugin-add superpowers-optimized` and matching update/uninstall commands) could never install a fork: Cursor resolves plugins by marketplace source rather than bare name, and those command names aren't Cursor's. The README now documents the real flow — register the fork's repo as a marketplace (Dashboard → Settings → Plugins → Import from Repo), then `/add-plugin` scoped as `superpowers-optimized@<marketplace>` — and notes there is no live working-tree/symlink dev install on Cursor.
 
 ## v6.6.2 (2026-06-22)
 

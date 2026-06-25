@@ -1,6 +1,6 @@
 {
   "name": "superpowers-optimized",
-  "version": "6.6.2",
+  "version": "6.7.0",
   "private": true,
   "description": "Build tooling for the Pi (pi.dev) extension. Skills/hooks for Claude/Codex/OpenCode require no Node tooling.",
   "scripts": {
